@@ -32,6 +32,7 @@ Do that one step, then run `uv run tools/hw.py` again. Trust it over your memory
 |---|---|
 | `uv run tools/hw.py plan` | before anything else, in the first session: what will happen, to tell the student |
 | `uv run tools/hw.py` | the start of every session, and after every step |
+| `uv run tools/hw.py confirm <github-username>` | the student said the GitHub account gh is logged in as is theirs (Step 0) |
 | `uv run tools/hw.py new <task-name>` | the student has chosen a task (Step 1) |
 | `uv run tools/hw.py check` | any time: the static checks CI runs, grouped by step |
 | `uv run tools/hw.py approve instruction`, `… window`, `… publish` | **(student runs this)** at the three checkpoints |
@@ -86,9 +87,12 @@ Nothing runs the task on this computer, so no Docker or Harbor is needed. The st
 1. **uv** runs the class's Python tools without installing anything system-wide. Check `uv --version`. If it's missing, install it, then open a new terminal (or use the full path the installer prints):
    - macOS or Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`
    - Windows (PowerShell): `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
-2. Then run `uv run tools/hw.py`. It goes through the rest one item at a time: the GitHub CLI and login, git's name and email, and the student's own fork. Follow its NEXT steps, and explain each tool in one line when it comes up:
-   - **git** keeps versions of files; **GitHub** hosts them; **gh**, the GitHub CLI, makes forking and pull requests one command each.
-   - A **fork** is the student's own copy of the class repository on GitHub. Their work goes there first, then to the class by pull request.
+2. Then run `uv run tools/hw.py`. Setup is GitHub, first and only:
+   - It checks that the **GitHub CLI** (gh) is installed, and installs it or tells the student how.
+   - The student logs in, once: **(student runs this)** `gh auth login --hostname github.com --git-protocol https --web`. It shows a one-time code, which they enter at github.com/login/device.
+   - Ask the student whether the account gh shows is theirs. If it is, record it: `uv run tools/hw.py confirm <github-username>`. If it isn't (someone else's login on a shared computer), they log out with `gh auth logout` and log in as themselves.
+
+   Explain in one line: **git** keeps versions of files, **GitHub** hosts them, and **gh** connects the two, so submitting is one command.
 
 On Windows, run everything in PowerShell or Windows Terminal. The student's approvals need a real terminal window.
 
@@ -115,7 +119,7 @@ The task must still be:
 - **Runnable in the class's checks:** no GPU, at most 4 CPUs and 8 GB of memory. The agent may take hours, but the reference answer can be precomputed (see Step 3c).
 - **Not a famous number** an agent could recall instead of computing (see Step 3e).
 
-**CHECKPOINT:** the student picks one idea and a short hyphenated task name, e.g. `aurora-oval-boundary`. Confirm in four sentences what goes in, what comes out, how it's checked, and why it's hard. Then run `uv run tools/hw.py new <task-name>`.
+**CHECKPOINT:** the student picks one idea and a short task name: lowercase words joined by hyphens. Confirm in four sentences what goes in, what comes out, how it's checked, and why it's hard. Then run `uv run tools/hw.py new <task-name>`.
 
 ## Step 2: The new folder
 
@@ -173,7 +177,7 @@ A tolerance is fair only if good methods pass and wrong ones fail. **The student
 ## Step 4: Submit (CHECKPOINT: pushing is public)
 
 1. **CHECKPOINT:** the student approves publishing: **(student runs this)** `uv run tools/hw.py approve publish`. It lists every file that will become public, and asks them to confirm the data may be shared and to accept the MIT license.
-2. Ask the student which AI agent(s) helped build the task, and how, in a sentence or two. Then run `uv run tools/hw.py submit --ai "<their answer>"`. It checks that the branch changes only their folder, commits, pushes to their fork, and opens the pull request with the class template filled in. `--dry-run` shows what it would do without doing it.
+2. Ask the student which AI agent(s) helped build the task, and how, in a sentence or two. Then run `uv run tools/hw.py submit --ai "<their answer>"`. It makes the student's own copy of the repository on GitHub (a **fork**: a pull request has to come from a copy they own), sets commits to use GitHub's private email address, checks that the branch changes only their folder, commits, pushes, and opens the pull request with the class template filled in. `--dry-run` shows what it would do without doing it.
 3. Changes after that: the student approves publishing again, and `uv run tools/hw.py submit` pushes them. The pull request updates by itself.
 4. When the pull request opens, GitHub checks the task: the reference solution must score 1 and an agent that does nothing must score 0. For a first-time contributor, GitHub holds the run until the instructor approves it, so "awaiting approval" is expected. Tell the student, and don't wait in a loop. `uv run tools/hw.py` shows the result the next time it runs. If the check failed, it shows how to read the log: read it together, fix the task, and submit again.
 5. That's the end of week 1. The instructor runs frontier agents on every task.

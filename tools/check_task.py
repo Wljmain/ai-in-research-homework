@@ -84,8 +84,9 @@ def check(task):
         fail("metadata", f"[task] name is {info.get('name')!r}", f'Set name = "{REPO}/{name}" (it must match the folder).')
     if not str(info.get("description", "")).strip():
         fail("metadata", "[task] description is empty", "One sentence saying what the task asks for.")
-    if not info.get("authors"):
-        fail("metadata", "no [[task.authors]]", 'Add [[task.authors]] with name = "Your Name".')
+    authors = info.get("authors") or []
+    if not authors or not all(str(a.get("name", "")).strip() for a in authors if isinstance(a, dict)):
+        fail("metadata", "[[task.authors]] has no name", 'Set name = "Your Name" under [[task.authors]].')
     for key in ("author_name", "field", "relevant_experience"):
         if not str(meta.get(key, "")).strip():
             fail("metadata", f'[metadata] {key} = "" needs a value', "Fill in every [metadata] field; the comments in task.toml give examples.")

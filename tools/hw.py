@@ -1,22 +1,23 @@
 # /// script
 # requires-python = ">=3.11"
 # ///
-"""The homework bookkeeper. It checks the setup and your task, prints a checklist, and ends with
-exactly one NEXT step that says who does it: the agent, the student, or both together.
+"""The homework bookkeeper. It checks your task, prints a checklist, and ends with exactly one NEXT
+step that says who does it: the agent, the student, or both together.
 
 Run from the repository root, on macOS, Linux or Windows (any shell, PowerShell included):
     uv run tools/hw.py                                     the checklist and the next step
     uv run tools/hw.py plan                                what happens, start to finish (show the student first)
+    uv run tools/hw.py confirm <github-username>           the student confirmed gh is logged in as them
     uv run tools/hw.py new <task-name>                     create your task folder and its branch
     uv run tools/hw.py check [task-folder]                 the static checks CI runs, grouped by step
     uv run tools/hw.py approve instruction|window|publish  the student signs off, in their own terminal
     uv run tools/hw.py note "<where we are, what's next>"  leave a note for the next session
-    uv run tools/hw.py submit --ai "<which AI helped>"     commit, push and open the pull request
+    uv run tools/hw.py submit --ai "<which AI helped>"     make the fork, push, open the pull request
 
-Students never run a task: no Docker or Harbor is needed here. When the pull request opens, CI checks
-that the reference solution scores 1 and doing nothing scores 0, and the instructor runs frontier
-agents. Progress is worked out from the files every time; approvals are stored in the task's
-authoring/progress.json with a fingerprint of the files they covered, so any later change shows up.
+Setup is the GitHub CLI, logged in as the student; submit then does the rest on GitHub (their fork,
+commit email, push, pull request). Students never run a task: CI checks each pull request, and the instructor runs frontier agents.
+Approvals are stored in the task's authoring/progress.json with a fingerprint of the files they
+covered, so any later change shows up.
 """
 import argparse
 import datetime
@@ -41,6 +42,7 @@ WEEK_N = WEEK.split("-")[-1]
 BRANCH_PREFIX = f"week{WEEK_N}-"
 PROGRESS = "authoring/progress.json"
 SLUG = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+NOREPLY = "@users.noreply.github.com"
 STATUS_TEMPLATE = "Where the task stands and what's next"
 HW = "uv run tools/hw.py"
 WINDOWS = os.name == "nt"
@@ -123,10 +125,11 @@ def system():
 
 
 def student_cmd(sub):
-    """A command the student types in their own terminal: go to the repository, then run tools/hw."""
+    """A command the student types in their own terminal: go to the repository, then run tools/hw.py."""
     if WINDOWS:  # PowerShell 5 has no &&
         return f'cd "{ROOT}"; {HW} {sub}'
-    return f"cd {shlex.quote(show(ROOT)) if ' ' in show(ROOT) else show(ROOT)} && {HW} {sub}"
+    where = show(ROOT)
+    return f"cd {shlex.quote(where) if ' ' in where else where} && {HW} {sub}"
 
 
 def github_repo(url):
@@ -185,7 +188,7 @@ def fix_list(problems, limit=4):
     return lines
 
 
-# ---------------------------------------------------------------- setup: git, GitHub, the fork
+# ---------------------------------------------------------------- this clone, and GitHub at submission
 
 class Ctx:
     def __init__(self):
@@ -193,13 +196,21 @@ class Ctx:
         code, top, _ = run(["git", "rev-parse", "--show-toplevel"])
         self.git = code == 0 and Path(top).resolve() == ROOT
         self.branch = git("branch", "--show-current") if self.git else ""
-        self.user = None
-        self.class_remote = None
+        self.user = None  # the GitHub user, once logged in
         self._pr = False
+        self.find_class_remote()
+        state = self.local_state() if self.git else {}
+        self.owner = state.get("owner", "")  # the GitHub login the student confirmed as theirs
 
     @property
     def login(self):
         return (self.user or {}).get("login", "")
+
+    def find_class_remote(self):
+        """The remote that points at the class repository: origin in a fresh clone, upstream after forking."""
+        urls = remote_urls() if self.git else {}
+        found = [r for r, u in urls.items() if "/".join(github_repo(u)).lower() == CLASS_REPO.lower()]
+        self.class_remote = "upstream" if "upstream" in found else (found[0] if found else None)
 
     def state_path(self):
         code, gitdir, _ = run(["git", "rev-parse", "--absolute-git-dir"])
@@ -230,39 +241,37 @@ def check_where(c):
             "you", "This folder isn't a git clone of the class repository. Clone it in the home folder and continue "
             "there:", [f"cd ~ && git clone https://github.com/{CLASS_REPO}.git && cd {REPO_NAME}"
                        if not WINDOWS else f"cd ~; git clone https://github.com/{CLASS_REPO}.git; cd {REPO_NAME}"])
-    return True, f"{c.system}; repository at {show(ROOT)}", None
+    return True, f"a clone of the class repository at {show(ROOT)} ({c.system})", None
 
 
 def check_gh(c):
-    code, out, _ = run(["gh", "--version"])
+    code, _, _ = run(["gh", "--version"])
     if code == 0:
-        version = re.search(r"\d+\.\d+\.\d+", out)
-        return True, "GitHub CLI (gh) " + (version.group(0) if version else ""), None
-    why = "Install the GitHub CLI (gh). It makes forking and pull requests one command each."
+        return True, "", None
+    why = "Install the GitHub CLI (gh): it logs the student in to GitHub, and opens their pull request at the end."
     if c.system == "Windows":
-        return False, "GitHub CLI (gh)", Next(
-            "student", why + " Run this in PowerShell, then close and reopen the terminal and restart the coding "
-            "agent, so both find gh:", ["winget install --id GitHub.cli -e"])
+        return False, "", Next("student", why + " Run this in PowerShell, then close and reopen the terminal and "
+                               "restart the coding agent, so both find gh:", ["winget install --id GitHub.cli -e"], step="Step 0")
     if c.system == "macOS" and shutil.which("brew"):
-        return False, "GitHub CLI (gh)", Next("you", why, ["brew install gh"])
+        return False, "", Next("you", why, ["brew install gh"], step="Step 0")
     if c.system == "macOS":
-        return False, "GitHub CLI (gh)", Next("student", why + " Download the macOS installer from https://cli.github.com and open it.")
+        return False, "", Next("student", why + " Download the macOS installer from https://cli.github.com and open it.", step="Step 0")
     if shutil.which("apt-get"):
-        return False, "GitHub CLI (gh)", Next("student", why + " It asks for their computer password:",
-                                              ["sudo apt-get update && sudo apt-get install -y gh"])
-    return False, "GitHub CLI (gh)", Next("student", why + " See https://github.com/cli/cli#installation")
+        return False, "", Next("student", why + " It asks for their computer password:",
+                               ["sudo apt-get update && sudo apt-get install -y gh"], step="Step 0")
+    return False, "", Next("student", why + " See https://github.com/cli/cli#installation", step="Step 0")
 
 
 def check_login(c):
     """Logged in to GitHub, and as whom. The answer is cached in .git/hw.json per login token (only a
     hash of the token is kept), so most runs make no network call."""
-    login = Next("student", "Log in to GitHub. No account yet? Create one first at https://github.com/signup. Then run "
-                 "the command below, accept the defaults, and approve in the browser. If no browser opens, go to "
-                 "https://github.com/login/device and type the code it shows.",
+    login = Next("student", "Log the student in to GitHub. No account yet? They create one first at "
+                 "https://github.com/signup. The command shows a one-time code and opens github.com/login/device: they "
+                 "type the code there and approve. If no browser opens, they open that address themselves.",
                  ["gh auth login --hostname github.com --git-protocol https --web"], step="Step 0")
     code, token, err = run(["gh", "auth", "token", "--hostname", "github.com"])
     if code != 0 and "unknown" not in err:
-        return False, "logged in to GitHub", login
+        return False, "", login
     key = hashlib.sha256(token.encode()).hexdigest()[:12] if code == 0 else ""
     state = c.local_state()
     if key and state.get("github_user", {}).get("token") == key:
@@ -271,14 +280,12 @@ def check_login(c):
     code, out, err = run(["gh", "api", "user"])
     if code != 0:
         if "rate limit" in err.lower():
-            return False, "logged in to GitHub", Next(
-                "you", "GitHub's API limit for this login is used up for now; another tool may be using it. Wait a few "
-                "minutes and try again.")
+            return False, "", Next("you", "GitHub's API limit for this login is used up for now; another tool may be "
+                                   "using it. Wait a few minutes and try again.")
         if "401" in err or "credentials" in err.lower() or "auth login" in err:
             login.text = "The GitHub login has expired. " + login.text
-            return False, "logged in to GitHub", login
-        return False, "logged in to GitHub", Next(
-            "you", f"GitHub didn't answer ({(err.splitlines() or [''])[0]}). Check the internet connection.")
+            return False, "", login
+        return False, "", Next("you", f"GitHub didn't answer ({(err.splitlines() or [''])[0]}). Check the internet connection.")
     user = json.loads(out)
     c.user = {"login": user["login"], "id": user["id"], "name": user.get("name") or "", "token": key}
     if key:
@@ -287,71 +294,52 @@ def check_login(c):
     return True, f"logged in to GitHub as {c.login}", None
 
 
-def check_identity(c):
-    name, email = git("config", "user.name"), git("config", "user.email")
-    if name and email:
-        public = "" if email.endswith("@users.noreply.github.com") else " (this email is public in commits)"
-        return True, f"git identity: {name} <{email}>{public}", None
-    if not email and not c.user:
-        return None, "git identity for commits", None
-    text = ("Set the name and email git records in each commit, for this repository only. The email is GitHub's "
-            "private address, which keeps their real one off the public record.")
-    who, cmds = "you", []
-    if not name:
-        if (c.user or {}).get("name"):
-            cmds.append(f'git config user.name "{c.user["name"]}"')
-        else:
-            who, text = "together", text + " Ask the student how their name should appear."
-            cmds.append('git config user.name "Their Name"')
-    if not email:
-        cmds.append(f"git config user.email {c.user['id']}+{c.login}@users.noreply.github.com")
-    return False, "git identity for commits", Next(who, text, cmds)
+def check_me(c):
+    if c.owner and c.owner.lower() == c.login.lower():
+        return True, f"GitHub account {c.login}, confirmed by the student", None
+    return False, "the student confirmed this is their GitHub account", Next(
+        "together", f"gh is logged in as {c.login}. Ask the student: is {c.login} your own GitHub account? If yes, "
+        "record it. If not (someone else's login on this computer), they log out and log in as themselves: "
+        "gh auth logout, then gh auth login --hostname github.com --git-protocol https --web.",
+        [f"{HW} confirm {c.login}"], step="Step 0")
 
 
-def check_fork(c):
-    remotes = remote_urls()
-    for remote, url in remotes.items():
-        if "/".join(github_repo(url)).lower() == CLASS_REPO.lower():
-            c.class_remote = remote
-    owner, name = github_repo(remotes.get("origin"))
-    if owner and owner.lower() == c.login.lower():
-        if not c.class_remote:
-            return False, "the class repository as `upstream`", Next(
-                "you", "Add the class repository as `upstream`, so the tools can compare against it:",
-                [f"git remote add upstream https://github.com/{CLASS_REPO}.git", "git fetch upstream"])
-        label = f"your fork: {owner}/{name}" if owner.lower() != CLASS_OWNER else f"the class repository ({owner}/{name})"
-        return True, label, None
-    cmds = ["gh repo fork --remote"]
-    if "origin" not in remotes:
-        cmds.insert(0, f"git remote add origin https://github.com/{CLASS_REPO}.git")
-    return False, "your own fork on GitHub", Next(
-        "you", "Make the student's own copy of the repository on GitHub (a fork) and point this clone at it. "
-        "Their fork becomes `origin`, the class repository `upstream`.", cmds, step="Step 0")
-
-
-def check_push(c):
-    url = remote_urls().get("origin", "")
-    if url.startswith(("git@", "ssh://")):
-        _, _, err = run(["ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", "git@github.com"], timeout=20)
-        if "successfully authenticated" in err:
-            return True, "git can push to GitHub (SSH)", None
-        return False, "git can push to GitHub", Next(
-            "you", "origin uses SSH, but GitHub doesn't accept this machine's SSH key. Switch it to HTTPS with the "
-            "GitHub login:", [f"git remote set-url origin https://github.com/{c.login}/{github_repo(url)[1]}.git",
-                              "gh auth setup-git"])
-    helpers = run(["git", "config", "--get-regexp", r"^credential\..*helper$"])[1]
-    if "auth git-credential" in helpers:
-        return True, "git can push to GitHub", None
-    return False, "git can push to GitHub", Next("you", "Let git push with the GitHub login:", ["gh auth setup-git"])
+def ensure_github(c, dry_run=False):
+    """What submitting needs, done for the student: GitHub's private email for commits, their own copy of
+    the repository on GitHub (a fork, where the pull request comes from), and git allowed to push."""
+    steps = []
+    noreply = f"{c.user['id']}+{c.login}{NOREPLY}"
+    if not git("config", "user.name"):
+        name = c.user.get("name") or c.login
+        steps.append((["git", "config", "user.name", name], f"git records commits as {name}"))
+    if not git("config", "user.email").endswith(NOREPLY):
+        steps.append((["git", "config", "user.email", noreply],
+                      f"commits here use GitHub's private address, {noreply}, so the student's email stays private"))
+    urls = remote_urls()
+    if (github_repo(urls.get("origin"))[0] or "").lower() != c.login.lower():
+        if "origin" not in urls:
+            steps.append((["git", "remote", "add", "origin", f"https://github.com/{CLASS_REPO}.git"], "connected this clone to GitHub"))
+        steps.append((["gh", "repo", "fork", "--remote"],
+                      f"made the student's own copy on GitHub, {c.login}/{REPO_NAME}, for the pull request to come from"))
+    if not urls.get("origin", "").startswith(("git@", "ssh://")) and \
+            "auth git-credential" not in run(["git", "config", "--get-regexp", r"^credential\..*helper$"])[1]:
+        steps.append((["gh", "auth", "setup-git"], "git pushes with the GitHub login"))
+    for cmd, what in steps:
+        if dry_run:
+            print(f"    {' '.join(shlex.quote(p) for p in cmd)}    # {what}")
+            continue
+        code, out, err = run(cmd, timeout=120)
+        if code != 0:
+            sys.exit(f"{' '.join(cmd)} failed:\n{err or out}")
+        print(f"Done: {what}.")
+    c.find_class_remote()
 
 
 SETUP = [
     ("where", check_where, "a git clone of the class repository", ()),
-    ("gh", check_gh, "GitHub CLI (gh)", ("where",)),
+    ("gh", check_gh, "GitHub CLI (gh) installed", ("where",)),
     ("login", check_login, "logged in to GitHub", ("gh",)),
-    ("identity", check_identity, "git identity for commits", ("where",)),
-    ("fork", check_fork, "your own fork on GitHub", ("login",)),
-    ("push", check_push, "git can push to GitHub", ("fork",)),
+    ("me", check_me, "the student confirmed this is their GitHub account", ("login",)),
 ]
 
 
@@ -359,7 +347,8 @@ def setup_items(c):
     items, ok = [], {}
     for key, check, label, needs in SETUP:
         if all(ok.get(n) for n in needs):
-            items.append(Item(key, *check(c)))
+            result = check(c)
+            items.append(Item(key, result[0], result[1] or label, result[2]))
         else:
             items.append(Item(key, None, label))
         ok[key] = items[-1].ok
@@ -369,8 +358,7 @@ def setup_items(c):
 def require_setup(c):
     for item in setup_items(c):
         if not item.ok:
-            print("Finish setup first.\n")
-            (item.next or Next("you", f"Run {HW} to see what's missing.")).show()
+            item.next.show()
             sys.exit(1)
 
 
@@ -392,10 +380,11 @@ TASK_STEPS = [
 
 def find_task(c):
     """The task being worked on: the one named by the branch, else the student's only task."""
-    base = ROOT / WEEK / "submissions" / c.login
-    tasks = sorted(p.parent for p in base.glob("*/task.toml")) if c.login and base.is_dir() else []
-    if c.branch.startswith(BRANCH_PREFIX) and (base / c.branch[len(BRANCH_PREFIX):] / "task.toml").is_file():
-        return base / c.branch[len(BRANCH_PREFIX):], tasks
+    base = ROOT / WEEK / "submissions" / c.owner if c.owner else None
+    tasks = sorted(p.parent for p in base.glob("*/task.toml")) if base and base.is_dir() else []
+    name = c.branch[len(BRANCH_PREFIX):] if c.branch.startswith(BRANCH_PREFIX) else ""
+    if base and name and (base / name / "task.toml").is_file():
+        return base / name, tasks
     return (tasks[0] if len(tasks) == 1 else None), tasks
 
 
@@ -442,15 +431,16 @@ def task_files(task, *subpaths):
 
 
 def fingerprint(task, *subpaths, extra=""):
-    """A short hash of the files; the session note in attempts.md doesn't count, so notes never undo approvals.
-    Line endings don't count either, so a Windows editor re-saving a file doesn't undo an approval."""
+    """A short hash of the files, by their path inside the task, so moving the task folder keeps approvals.
+    The session note in attempts.md and line endings don't count, so neither undoes an approval."""
     h = hashlib.sha256()
+    prefix = rel(task) + "/"
     for name in task_files(task, *subpaths):
         path = ROOT / name
         content = path.read_bytes().replace(b"\r\n", b"\n") if path.is_file() else b"(deleted)"
         if name.endswith("authoring/attempts.md"):
             content = re.sub(rb"(?ms)^## Status[ \t]*\n.*?(?=^## |\Z)", b"", content)
-        h.update(name.encode() + b"\0" + content + b"\0")
+        h.update(name[len(prefix):].encode() + b"\0" + content + b"\0")
     h.update(extra.encode())
     return h.hexdigest()[:16]
 
@@ -525,6 +515,7 @@ def approve_next(what, progress):
 
 
 def task_items(c, task, check_pr=True):
+    """The task's checklist, as (items, task)."""
     groups, _, _ = lint(task)
     progress = load_progress(task)
     branch = BRANCH_PREFIX + Path(task).name
@@ -579,7 +570,7 @@ def task_items(c, task, check_pr=True):
     # 10. the pull request, and what CI said about it
     if not all(i.ok for i in items) or not check_pr:
         add("pr", None, "pull request open")
-        return items
+        return items, task
     pr = find_pr(c, branch)
     c._pr = pr
     if pr is False:
@@ -587,7 +578,8 @@ def task_items(c, task, check_pr=True):
     elif pr is None:
         add("pr", False, "pull request open", Next(
             "together", "Ask the student which AI agent(s) helped build the task, and how, in a sentence or two. "
-            "Then commit, push and open the pull request:", [f'{HW} submit --ai "<their answer>"'], step="Step 4"))
+            "Then submit: this makes their copy on GitHub, pushes, and opens the pull request.",
+            [f'{HW} submit --ai "<their answer>"'], step="Step 4"))
     elif pr["state"] == "MERGED":
         add("pr", True, f"pull request merged: {pr['url']}")
     else:
@@ -606,7 +598,7 @@ def task_items(c, task, check_pr=True):
                  f"gh run view <run-id from the line above> --repo {CLASS_REPO} --log-failed"], step="Step 4"))
         else:
             add("pr", True, f"pull request open: {pr['url']}" + (", checks passed" if checks == "passed" else ""))
-    return items
+    return items, task
 
 
 # ---------------------------------------------------------------- uv run tools/hw.py (status)
@@ -614,8 +606,8 @@ def task_items(c, task, check_pr=True):
 PLAN = f"""\
 PLAN: what happens, start to finish. Show this to the student before anything else.
 
-  1. Set up (once). The agent checks git and GitHub and fixes what's missing. You do one
-     thing yourself, in your own terminal: log in to GitHub.
+  1. Log in to GitHub. You do this yourself, in your own terminal, once. The agent installs the
+     GitHub CLI first if it's missing.
   2. Choose the task. The agent asks about your research, and together you pick the hardest
      problem in your field that a program can still check.
   3. Build it. The agent writes the container, the reference solution and the tests. You write
@@ -641,8 +633,11 @@ def mark(item, first):
 def status(c=None):
     c = c or Ctx()
     setup = setup_items(c)
-    ready = all(i.ok for i in setup if i.key in ("where", "gh", "login", "fork"))
+    ready = all(i.ok for i in setup)
     task, tasks = find_task(c) if ready else (None, [])
+    items = []
+    if task:
+        items, task = task_items(c, task)
 
     print(f"Homework bookkeeper, {WEEK}. Run every command from {show(ROOT)}.")
     if not task and not tasks:
@@ -653,13 +648,12 @@ def status(c=None):
         print(textwrap.fill(note, 100, initial_indent="  ", subsequent_indent="  "))
 
     first_setup = next((i for i in setup if i.ok is False), None)
-    print("\nSetup")
+    print()
     for item in setup:
         print(f"  {mark(item, first_setup)} {item.label}")
 
-    items = []
     if not ready:
-        print("\nTask\n  (checked once setup is done)")
+        pass
     elif not task:
         if tasks:
             names = ", ".join(t.name for t in tasks)
@@ -667,13 +661,12 @@ def status(c=None):
                        [f"git switch {BRANCH_PREFIX}<task-name>"])
         else:
             nxt = Next("together", "Help the student choose the hardest task in their field that a program can still "
-                       "check. When they have picked one, and a short name like aurora-oval-boundary, create its "
-                       "folder and branch:", [f"{HW} new <task-name>"], step="Step 1")
+                       "check. When they have picked one, and a short name for it (lowercase words joined by hyphens), "
+                       "create its folder and branch:", [f"{HW} new <task-name>"], step="Step 1")
         items = [Item("branch", False, "choose the task; create its folder and branch", nxt)]
         items += [Item(k, None, label) for k, label in TASK_STEPS[1:]]
         print("\nTask: not chosen yet")
     else:
-        items = task_items(c, task)
         print(f"\nTask: {rel(task)}")
     first_task = next((i for i in items if i.ok is False), None)
     for n, item in enumerate(items, 1):
@@ -694,7 +687,6 @@ def status(c=None):
              "frontier AI agents on every task.").show()
     if task:
         print(f'\nBefore ending a session: {HW} note "<where we are, what\'s next>"')
-    return setup, items
 
 
 # ---------------------------------------------------------------- commands
@@ -705,22 +697,20 @@ def current_task(c, arg=None):
         if not (task / "task.toml").is_file():
             sys.exit(f"{arg} is not a task folder (no task.toml).")
         return task
-    for item in setup_items(c):
-        if item.key in ("where", "gh", "login", "fork") and not item.ok:
-            sys.exit(f"Setup isn't done. Run {HW} and follow its NEXT step.")
+    require_setup(c)
     task, _ = find_task(c)
     if not task:
-        sys.exit(f"No task found for {c.login or 'you'}. Run {HW} to see what's next.")
+        sys.exit(f"No task found. Run {HW} to see what's next.")
     return task
 
 
 def cmd_new(args):
     c = Ctx()
     require_setup(c)
-    name = args.name
+    name, login = args.name, c.owner
     if not SLUG.match(name):
-        sys.exit("A task name is lowercase words joined by hyphens, e.g. aurora-oval-boundary.")
-    task = ROOT / WEEK / "submissions" / c.login / name
+        sys.exit("A task name is lowercase words joined by hyphens.")
+    task = ROOT / WEEK / "submissions" / login / name
     branch = BRANCH_PREFIX + name
     if task.exists():
         sys.exit(f"{rel(task)} already exists. To work on it: git switch {branch}")
@@ -735,10 +725,24 @@ def cmd_new(args):
             sys.exit(f"Couldn't switch to branch {branch}:\n{err}")
         print(f"On branch {branch}.")
     email = git("config", "user.email")
-    scaffold(task, c.login, git("config", "user.name") or c.login,
-             email if email.endswith("@users.noreply.github.com") else "")
+    scaffold(task, login, git("config", "user.name") or (c.user or {}).get("name", ""), email if email.endswith(NOREPLY) else "")
     print(f"Created {rel(task)} from the class templates.\n")
     status(Ctx())
+
+
+def cmd_confirm(args):
+    c = Ctx()
+    for item in setup_items(c):
+        if item.key != "me" and not item.ok:
+            item.next.show()
+            sys.exit(1)
+    if args.login.lower() != c.login.lower():
+        sys.exit(f"gh is logged in as {c.login}, not {args.login}. If {c.login} isn't the student, they log out and in "
+                 "again as themselves: gh auth logout, then gh auth login --hostname github.com --git-protocol https --web")
+    state = c.local_state()
+    state["owner"] = c.login
+    c.save_local_state(state)
+    print(f"Recorded: this is {c.login}'s work. Next: {HW}")
 
 
 def cmd_check(args):
@@ -814,8 +818,8 @@ def cmd_approve(args):
                   "The tests check the result, not how it was computed."]
         record = window_fingerprint(task)
     else:
-        items = [i for i in task_items(c, task, check_pr=False) if i.key not in ("publish", "pr")]
-        missing = [i for i in items if not i.ok]
+        items, task = task_items(c, task, check_pr=False)
+        missing = [i for i in items if i.key not in ("publish", "pr") and not i.ok]
         if missing:
             print(f"Not ready to publish yet: \"{missing[0].label}\" isn't done. Your agent can see what's next with {HW}.")
             sys.exit(1)
@@ -876,9 +880,8 @@ def pr_body(c, task, ai):
 
 def cmd_submit(args):
     c = Ctx()
-    require_setup(c)
     task = current_task(c)
-    items = task_items(c, task)
+    items, task = task_items(c, task)
     missing = next((i for i in items if i.key != "pr" and not i.ok), None)
     if missing:
         print(f"Not ready to submit: \"{missing.label}\" isn't done.\n")
@@ -894,6 +897,24 @@ def cmd_submit(args):
         print(f'    {HW} submit --ai "<their answer>"')
         sys.exit(2)
 
+    branch = BRANCH_PREFIX + task.name
+    add = ["git", "add", "--", rel(task)]
+    commit = ["git", "commit", "-q", "-m", ("Update " if pr else "Add ") + task.name]
+    push = ["git", "push", "-u", "origin", branch]
+    body_path = Path(tempfile.gettempdir()) / f"hw-pr-{task.name}.md"
+    create = ["gh", "pr", "create", "--repo", CLASS_REPO, "--base", "main", "--head", f"{c.login}:{branch}",
+              "--title", f"[week {WEEK_N}] {task.name}", "--body-file", str(body_path)]
+    if args.dry_run:
+        print("Dry run. Would run:")
+        ensure_github(c, dry_run=True)
+        for cmd in [add, commit, push] + ([] if pr else [create]):
+            print("    " + " ".join(shlex.quote(part) for part in cmd))
+        if not pr:
+            print("\nwith this pull request description:\n")
+            print(pr_body(c, task, args.ai))
+        return
+    ensure_github(c)
+
     # A pull request may only change the student's own folder.
     if c.class_remote:
         run(["git", "fetch", "-q", c.class_remote, "main"], timeout=90)
@@ -908,22 +929,6 @@ def cmd_submit(args):
               "then commit), and run this again.")
         sys.exit(1)
 
-    branch = BRANCH_PREFIX + task.name
-    title = f"[week {WEEK_N}] {task.name}"
-    add = ["git", "add", "--", rel(task)]
-    commit = ["git", "commit", "-q", "-m", ("Update " if pr else "Add ") + task.name]
-    push = ["git", "push", "-u", "origin", branch]
-    body_path = Path(tempfile.gettempdir()) / f"hw-pr-{task.name}.md"
-    create = ["gh", "pr", "create", "--repo", CLASS_REPO, "--base", "main", "--head", f"{c.login}:{branch}",
-              "--title", title, "--body-file", str(body_path)]
-    if args.dry_run:
-        print("Dry run. Would run:")
-        for cmd in [add, commit, push] + ([] if pr else [create]):
-            print("    " + " ".join(shlex.quote(part) for part in cmd))
-        if not pr:
-            print("\nwith this pull request description:\n")
-            print(pr_body(c, task, args.ai))
-        return
     code, out, err = run(add)
     if code != 0:
         sys.exit(f"git add failed:\n{err or out}")
@@ -935,7 +940,7 @@ def cmd_submit(args):
     code, out, err = run(push, timeout=180)
     if code != 0:
         sys.exit(f"git push failed:\n{err or out}")
-    print(f"Pushed {branch} to your fork.")
+    print(f"Pushed {branch} to {c.login}/{REPO_NAME}.")
     if pr:
         print(f"The pull request updates by itself: {pr['url']}")
     else:
@@ -957,18 +962,20 @@ def main():
     sub.add_parser("status", help="the checklist and the next step (the default)")
     sub.add_parser("plan", help="what happens, start to finish: show it to the student first")
     p = sub.add_parser("new", help="create your task folder and its branch")
-    p.add_argument("name", help="lowercase words joined by hyphens, e.g. aurora-oval-boundary")
+    p.add_argument("name", help="lowercase words joined by hyphens")
+    p = sub.add_parser("confirm", help="record that gh is logged in as the student")
+    p.add_argument("login", help="the GitHub username the student confirmed as theirs")
     p = sub.add_parser("check", help="the static checks CI runs, grouped by step")
     p.add_argument("task", nargs="?", help="a task folder (default: yours)")
     p = sub.add_parser("approve", help="the student signs off, in their own terminal")
     p.add_argument("what", choices=["instruction", "window", "publish"])
     p = sub.add_parser("note", help="leave a note for the next session: where we are, what's next")
     p.add_argument("text")
-    p = sub.add_parser("submit", help="commit, push and open (or update) the pull request")
+    p = sub.add_parser("submit", help="make the fork, push, and open (or update) the pull request")
     p.add_argument("--ai", help="which AI agent(s) helped build the task, and how")
     p.add_argument("--dry-run", action="store_true", help="show what would happen, change nothing")
     args = parser.parse_args()
-    commands = {"plan": cmd_plan, "new": cmd_new, "check": cmd_check, "approve": cmd_approve,
+    commands = {"plan": cmd_plan, "confirm": cmd_confirm, "new": cmd_new, "check": cmd_check, "approve": cmd_approve,
                 "note": cmd_note, "submit": cmd_submit}
     if args.command in commands:
         commands[args.command](args)
