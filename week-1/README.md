@@ -17,7 +17,7 @@ It walks you through setup, finding the hardest problem you can still verify, bu
 
 Coming back later? Open your agent in your clone of this repository and give it the same line. It picks up where you left off.
 
-**You'll need:** a [GitHub account](https://github.com/signup), [Docker](https://www.docker.com/products/docker-desktop/), [uv](https://docs.astral.sh/uv/) and an AI coding agent. Your agent helps you install the rest. No AI subscription? Codex works with a free ChatGPT account, and GitHub Copilot is free for verified students.
+**You'll need:** a [GitHub account](https://github.com/signup), [uv](https://docs.astral.sh/uv/) and an AI coding agent, on macOS, Linux or Windows. Your agent helps you install the rest. No Docker: tasks are run on GitHub and by the instructor. No AI subscription? Codex works with a free ChatGPT account, and GitHub Copilot is free for verified students.
 
 ## What you submit
 

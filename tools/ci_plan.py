@@ -66,7 +66,7 @@ if changed is not None:
         f.split("/")[0] in TASK_WEEKS for f in present)
     if misplaced or missing:
         print(f"::error::No valid task found. A task is a folder week-<n>/submissions/{author_login}/<task-name>/ "
-              "with task.toml directly inside it. Run tools/new_task.sh to create one in the right place.")
+              "with task.toml directly inside it. Create one in the right place with: uv run tools/hw.py new <task-name>")
         sys.exit(1)
 
 bad = [t for t in targets if not TASK_DIR.match(t)]

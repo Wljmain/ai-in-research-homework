@@ -1,0 +1,40 @@
+name: Student tools
+
+# tools/hw.py runs on students' computers, Windows included. This checks it on all three.
+on:
+  push:
+    branches: [main]
+    paths: ["tools/**", "templates/**", ".github/workflows/tools.yml"]
+  pull_request:
+    paths: ["tools/**", "templates/**", ".github/workflows/tools.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hw:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: The plan, and the static checks on the example (default shell; PowerShell on Windows)
+        run: |
+          uv run tools/hw.py plan
+          uv run tools/hw.py check week-1/example/solar-wind-spectral-index
+      - name: A task made from the templates parses, and fails the checks for its placeholders
+        shell: bash
+        run: |
+          uv run --python 3.12 python -c "import sys; sys.path.insert(0, 'tools'); import hw; hw.scaffold(hw.ROOT / 'week-1/submissions/ci-user/ci-task', 'ci-user', 'CI Student', '')"
+          set +e
+          out="$(uv run tools/hw.py check week-1/submissions/ci-user/ci-task)"
+          code=$?
+          set -e
+          echo "$out"
+          test "$code" = 1
+          grep -q "still has scaffold placeholder text" <<<"$out"
+          ! grep -q "not valid TOML" <<<"$out"

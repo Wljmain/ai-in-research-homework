@@ -1,20 +1,22 @@
-"""The homework bookkeeper. It checks this machine and your task, prints a checklist, and ends with
+# /// script
+# requires-python = ">=3.11"
+# ///
+"""The homework bookkeeper. It checks the setup and your task, prints a checklist, and ends with
 exactly one NEXT step that says who does it: the agent, the student, or both together.
 
-Run from the repository root:
-    tools/hw                                     the checklist and the next step
-    tools/hw plan                                what happens, start to finish (show the student first)
-    tools/hw new <task-name>                     create your task folder and its branch
-    tools/hw check [task-folder]                 the static checks CI runs, grouped by step
-    tools/hw validate                            reference solution must score 1, doing nothing 0
-    tools/hw test-setup                          run the class example once: do Docker and Harbor work here?
-    tools/hw approve instruction|window|publish  the student signs off, in their own terminal
-    tools/hw note "<where we are, what's next>"  leave a note for the next session
-    tools/hw submit --ai "<which AI helped>"     commit, push and open the pull request
+Run from the repository root, on macOS, Linux or Windows (any shell, PowerShell included):
+    uv run tools/hw.py                                     the checklist and the next step
+    uv run tools/hw.py plan                                what happens, start to finish (show the student first)
+    uv run tools/hw.py new <task-name>                     create your task folder and its branch
+    uv run tools/hw.py check [task-folder]                 the static checks CI runs, grouped by step
+    uv run tools/hw.py approve instruction|window|publish  the student signs off, in their own terminal
+    uv run tools/hw.py note "<where we are, what's next>"  leave a note for the next session
+    uv run tools/hw.py submit --ai "<which AI helped>"     commit, push and open the pull request
 
-Progress is worked out from the files every time. Approvals and validation are stored in the task's
+Students never run a task: no Docker or Harbor is needed here. When the pull request opens, CI checks
+that the reference solution scores 1 and doing nothing scores 0, and the instructor runs frontier
+agents. Progress is worked out from the files every time; approvals are stored in the task's
 authoring/progress.json with a fingerprint of the files they covered, so any later change shows up.
-Written for Python 3.8+, so the setup checks run before uv is installed.
 """
 import argparse
 import datetime
@@ -37,22 +39,32 @@ CLASS_OWNER, REPO_NAME = CLASS_REPO.split("/")
 WEEK = os.environ.get("WEEK", "week-1")
 WEEK_N = WEEK.split("-")[-1]
 BRANCH_PREFIX = f"week{WEEK_N}-"
-HARBOR = "harbor@0.23.0"
-EXAMPLE = "week-1/example/solar-wind-spectral-index"
 PROGRESS = "authoring/progress.json"
 SLUG = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
-VALIDATED = ("task.toml", "instruction.md", "environment", "solution", "tests")
 STATUS_TEMPLATE = "Where the task stands and what's next"
-HW = "tools/hw"
+HW = "uv run tools/hw.py"
+WINDOWS = os.name == "nt"
+# templates/ file -> where it goes in a new task
+SCAFFOLD = {
+    "instruction.md": "instruction.md",
+    "README.md": "README.md",
+    "attempts.md": "authoring/attempts.md",
+    "environment/Dockerfile": "environment/Dockerfile",
+    "solution/solve.sh": "solution/solve.sh",
+    "tests/Dockerfile": "tests/Dockerfile",
+    "tests/test.sh": "tests/test.sh",
+    "tests/test_outputs.py": "tests/test_outputs.py",
+}
 
 
 # ---------------------------------------------------------------- small helpers
 
-def run(cmd, timeout=30, env=None):
+def run(cmd, timeout=30):
     """Runs a command in the repository. Returns (exit code, stdout, stderr); 127 if not installed."""
-    env = dict(env or os.environ, GIT_TERMINAL_PROMPT="0")  # fail fast instead of waiting for a password
+    env = dict(os.environ, GIT_TERMINAL_PROMPT="0")  # fail fast instead of waiting for a password
     try:
-        p = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True, timeout=timeout, env=env)
+        p = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=timeout, env=env)
         return p.returncode, p.stdout.strip(), p.stderr.strip()
     except FileNotFoundError:
         return 127, "", ""
@@ -64,16 +76,11 @@ def git(*args):
     return run(["git"] + list(args))[1]
 
 
-def tool_env():
-    """The environment for tools that need uv: uv's install folders are added to PATH."""
-    env = dict(os.environ)
-    env["PATH"] = os.pathsep.join([env.get("PATH", ""), str(HOME / ".local/bin"), str(HOME / ".cargo/bin")])
-    return env
-
-
 def show(path):
-    """A path for humans: ~/... when it's under the home folder."""
+    """A path for humans: ~/... when it's under the home folder (the full path on Windows)."""
     path = Path(path).resolve()
+    if WINDOWS:
+        return str(path)
     try:
         return "~/" + path.relative_to(HOME).as_posix()
     except ValueError:
@@ -86,9 +93,13 @@ def rel(path):
 
 def read(path):
     try:
-        return Path(path).read_text()
+        return Path(path).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return ""
+
+
+def write(path, text):
+    Path(path).write_text(text, encoding="utf-8", newline="\n")
 
 
 def now():
@@ -106,13 +117,16 @@ def section(text, heading):
 
 
 def system():
-    if os.name == "nt" or sys.platform.startswith(("cygwin", "msys")):
+    if WINDOWS:
         return "Windows"
-    if sys.platform == "darwin":
-        return "macOS"
-    if "microsoft" in read("/proc/version").lower():
-        return "WSL"
-    return "Linux"
+    return "macOS" if sys.platform == "darwin" else "Linux"
+
+
+def student_cmd(sub):
+    """A command the student types in their own terminal: go to the repository, then run tools/hw."""
+    if WINDOWS:  # PowerShell 5 has no &&
+        return f'cd "{ROOT}"; {HW} {sub}'
+    return f"cd {shlex.quote(show(ROOT)) if ' ' in show(ROOT) else show(ROOT)} && {HW} {sub}"
 
 
 def github_repo(url):
@@ -130,11 +144,6 @@ def remote_urls():
     return urls
 
 
-def need_uv_python():
-    if sys.version_info < (3, 11):
-        sys.exit(f"This command needs uv. Run {HW} to set it up first.")
-
-
 # ---------------------------------------------------------------- what to do next
 
 class Next:
@@ -149,10 +158,8 @@ class Next:
     def __init__(self, who, text, cmds=(), details=(), step=None):
         self.who, self.text, self.cmds, self.details, self.step = who, text, list(cmds), list(details), step
 
-    def show(self, heading=None):
+    def show(self):
         title, then = self.WHO[self.who]
-        if heading:
-            title = heading + title[4:]
         print(title + (f"   SKILL.md {self.step}" if self.step else ""))
         print(textwrap.fill(self.text, 100, initial_indent="  ", subsequent_indent="  "))
         for line in self.details:
@@ -178,7 +185,7 @@ def fix_list(problems, limit=4):
     return lines
 
 
-# ---------------------------------------------------------------- setup: this machine
+# ---------------------------------------------------------------- setup: git, GitHub, the fork
 
 class Ctx:
     def __init__(self):
@@ -187,9 +194,7 @@ class Ctx:
         self.git = code == 0 and Path(top).resolve() == ROOT
         self.branch = git("branch", "--show-current") if self.git else ""
         self.user = None
-        self.uv = shutil.which("uv", path=tool_env()["PATH"])
         self.class_remote = None
-        self.docker = False
         self._pr = False
 
     @property
@@ -210,7 +215,7 @@ class Ctx:
     def save_local_state(self, state):
         path = self.state_path()
         if path:
-            path.write_text(json.dumps(state, indent=2) + "\n")
+            write(path, json.dumps(state, indent=2) + "\n")
 
     def base_ref(self):
         """The class repository's main branch, as this clone knows it."""
@@ -220,27 +225,11 @@ class Ctx:
 
 
 def check_where(c):
-    if c.system == "Windows":
-        return False, "Windows", Next(
-            "student", "The class tools need Linux, which on Windows means WSL2. In PowerShell, run the command "
-            "below and restart. Then install Docker Desktop and turn on Settings > Resources > WSL integration, open "
-            "the Ubuntu app, start the coding agent there, and clone the repository again inside Ubuntu, under ~.",
-            ["wsl --install"])
     if not c.git:
         return False, "a git clone of the class repository", Next(
-            "you", "This folder isn't a git clone of the class repository. Clone it under the home folder and "
-            "continue there:", [f"cd ~ && git clone https://github.com/{CLASS_REPO}.git && cd {REPO_NAME}"])
-    reclone = [f"cd ~ && git clone {remote_urls().get('origin') or 'https://github.com/' + CLASS_REPO} && cd {REPO_NAME}"]
-    if c.system == "WSL" and str(ROOT).startswith("/mnt/"):
-        return False, f"repository at {ROOT}", Next(
-            "you", "This clone is on the Windows drive (/mnt/...), where Docker is slow and file permissions break. "
-            f"Clone it again inside Ubuntu, under ~, and continue there. Copy any work in {WEEK}/submissions/ across first.",
-            reclone)
-    if not str(ROOT).startswith(str(HOME.resolve()) + os.sep):
-        return False, f"repository at {ROOT}", Next(
-            "you", "This clone is outside the home folder, and Docker often can't see folders there: the verifier then "
-            f"finds no files. Clone it again under ~ and continue there. Copy any work in {WEEK}/submissions/ across first.",
-            reclone)
+            "you", "This folder isn't a git clone of the class repository. Clone it in the home folder and continue "
+            "there:", [f"cd ~ && git clone https://github.com/{CLASS_REPO}.git && cd {REPO_NAME}"
+                       if not WINDOWS else f"cd ~; git clone https://github.com/{CLASS_REPO}.git; cd {REPO_NAME}"])
     return True, f"{c.system}; repository at {show(ROOT)}", None
 
 
@@ -250,6 +239,10 @@ def check_gh(c):
         version = re.search(r"\d+\.\d+\.\d+", out)
         return True, "GitHub CLI (gh) " + (version.group(0) if version else ""), None
     why = "Install the GitHub CLI (gh). It makes forking and pull requests one command each."
+    if c.system == "Windows":
+        return False, "GitHub CLI (gh)", Next(
+            "student", why + " Run this in PowerShell, then close and reopen the terminal and restart the coding "
+            "agent, so both find gh:", ["winget install --id GitHub.cli -e"])
     if c.system == "macOS" and shutil.which("brew"):
         return False, "GitHub CLI (gh)", Next("you", why, ["brew install gh"])
     if c.system == "macOS":
@@ -325,7 +318,7 @@ def check_fork(c):
         if not c.class_remote:
             return False, "the class repository as `upstream`", Next(
                 "you", "Add the class repository as `upstream`, so the tools can compare against it:",
-                [f"git remote add upstream https://github.com/{CLASS_REPO}.git && git fetch upstream"])
+                [f"git remote add upstream https://github.com/{CLASS_REPO}.git", "git fetch upstream"])
         label = f"your fork: {owner}/{name}" if owner.lower() != CLASS_OWNER else f"the class repository ({owner}/{name})"
         return True, label, None
     cmds = ["gh repo fork --remote"]
@@ -352,63 +345,13 @@ def check_push(c):
     return False, "git can push to GitHub", Next("you", "Let git push with the GitHub login:", ["gh auth setup-git"])
 
 
-def check_uv(c):
-    if not c.uv:
-        return False, "uv", Next("you", "Install uv. It runs Harbor and the class's Python tools without installing "
-                                 "anything system-wide:", ["curl -LsSf https://astral.sh/uv/install.sh | sh"])
-    version = run([c.uv, "--version"])[1].split()
-    where = "" if shutil.which("uv") else f", at {show(c.uv)} (new terminals find it by name)"
-    return True, f"uv {version[1] if len(version) > 1 else ''}{where}", None
-
-
-def check_docker(c):
-    install = {
-        "macOS": "Install Docker Desktop from https://www.docker.com/products/docker-desktop/, open it, and wait "
-                 "until it says the engine is running.",
-        "WSL": "Install Docker Desktop on Windows from https://www.docker.com/products/docker-desktop/ and open it. "
-               "In its Settings > Resources > WSL integration, turn on Ubuntu, then Apply & restart. Close and reopen "
-               "the Ubuntu window.",
-        "Linux": "Install Docker Engine (https://docs.docker.com/engine/install/), let this user run it with the "
-                 "command below, then log out and back in.",
-    }
-    if not shutil.which("docker"):
-        return False, "Docker", Next("student", install.get(c.system, install["Linux"]) + " It's a large download.",
-                                     ["sudo usermod -aG docker $USER"] if c.system == "Linux" else [], step="Step 0")
-    code, out, err = run(["docker", "info", "--format", "{{.ServerVersion}}"], timeout=30)
-    if code == 0 and out:
-        c.docker = True
-        return True, f"Docker {out}, running", None
-    if "permission denied" in err.lower():
-        return False, "Docker", Next("student", "Docker is installed, but this user may not use it yet. Run this, "
-                                     "then log out and back in (on WSL: close every Ubuntu window and reopen one):",
-                                     ["sudo usermod -aG docker $USER"])
-    if c.system == "Linux":
-        return False, "Docker", Next("student", "Docker is installed but not running. Start it:", ["sudo systemctl start docker"])
-    if c.system == "WSL" and "could not be found" in (out + err):
-        return False, "Docker", Next("student", install["WSL"])
-    return False, "Docker", Next("student", "Docker is installed but not running. Open Docker Desktop and wait until "
-                                 "it says the engine is running.")
-
-
-def check_example(c):
-    done = c.local_state().get("setup_test", {})
-    if done.get("harbor") == HARBOR:
-        return True, f"the class example runs on this machine ({done.get('at', '')[:10]})", None
-    return False, "the class example runs on this machine", Next(
-        "you", "Run the class's example task once, to prove Docker and Harbor work on this machine. The first run "
-        "downloads images and takes a few minutes; tell the student.", [f"{HW} test-setup"], step="Step 0")
-
-
 SETUP = [
-    ("where", check_where, "this computer and folder", ()),
+    ("where", check_where, "a git clone of the class repository", ()),
     ("gh", check_gh, "GitHub CLI (gh)", ("where",)),
     ("login", check_login, "logged in to GitHub", ("gh",)),
     ("identity", check_identity, "git identity for commits", ("where",)),
     ("fork", check_fork, "your own fork on GitHub", ("login",)),
     ("push", check_push, "git can push to GitHub", ("fork",)),
-    ("uv", check_uv, "uv", ()),
-    ("docker", check_docker, "Docker", ()),
-    ("example", check_example, "the class example runs on this machine", ("docker", "uv", "where")),
 ]
 
 
@@ -416,12 +359,19 @@ def setup_items(c):
     items, ok = [], {}
     for key, check, label, needs in SETUP:
         if all(ok.get(n) for n in needs):
-            result = check(c)
-            items.append(Item(key, *result))
+            items.append(Item(key, *check(c)))
         else:
             items.append(Item(key, None, label))
         ok[key] = items[-1].ok
     return items
+
+
+def require_setup(c):
+    for item in setup_items(c):
+        if not item.ok:
+            print("Finish setup first.\n")
+            (item.next or Next("you", f"Run {HW} to see what's missing.")).show()
+            sys.exit(1)
 
 
 # ---------------------------------------------------------------- the task
@@ -435,7 +385,6 @@ TASK_STEPS = [
     ("tests", "verifier tests"),
     ("window", "the student approved the acceptance window"),
     ("metadata", "task.toml metadata and README"),
-    ("valid", "valid: the reference solution scores 1, doing nothing scores 0"),
     ("publish", "the student approved publishing"),
     ("pr", "pull request open"),
 ]
@@ -450,8 +399,29 @@ def find_task(c):
     return (tasks[0] if len(tasks) == 1 else None), tasks
 
 
+def scaffold(task, login, author, email):
+    """A new task folder from templates/, in Harbor's task format."""
+    templates = ROOT / "templates"
+    for src, dst in SCAFFOLD.items():
+        (task / dst).parent.mkdir(parents=True, exist_ok=True)
+        write(task / dst, read(templates / src))
+    for folder in ("environment/data", "authoring/provenance", "authoring/evidence"):
+        (task / folder).mkdir(parents=True, exist_ok=True)
+    for script in ("solution/solve.sh", "tests/test.sh"):
+        try:
+            os.chmod(task / script, 0o755)
+        except OSError:
+            pass  # Harbor marks the scripts executable itself
+    toml = read(templates / "task.toml")
+    for marker, value in (("@TASK_NAME@", task.name), ("@GITHUB_USERNAME@", login),
+                          ("@AUTHOR_NAME@", json.dumps(author, ensure_ascii=False)),
+                          ("@AUTHOR_EMAIL@", json.dumps(email, ensure_ascii=False))):
+        toml = toml.replace(marker, value)
+    write(task / "task.toml", toml)
+
+
 def lint(task):
-    """The static checks, grouped by part. Needs Python 3.11+ (tools/hw runs on uv's Python 3.12)."""
+    """The static checks, grouped by part."""
     sys.path.insert(0, str(ROOT / "tools"))
     import check_task
     del check_task.failures[:], check_task.warnings[:]
@@ -472,11 +442,12 @@ def task_files(task, *subpaths):
 
 
 def fingerprint(task, *subpaths, extra=""):
-    """A short hash of the files; the session note in attempts.md doesn't count, so notes never undo approvals."""
+    """A short hash of the files; the session note in attempts.md doesn't count, so notes never undo approvals.
+    Line endings don't count either, so a Windows editor re-saving a file doesn't undo an approval."""
     h = hashlib.sha256()
     for name in task_files(task, *subpaths):
         path = ROOT / name
-        content = path.read_bytes() if path.is_file() else b"(deleted)"
+        content = path.read_bytes().replace(b"\r\n", b"\n") if path.is_file() else b"(deleted)"
         if name.endswith("authoring/attempts.md"):
             content = re.sub(rb"(?ms)^## Status[ \t]*\n.*?(?=^## |\Z)", b"", content)
         h.update(name.encode() + b"\0" + content + b"\0")
@@ -489,10 +460,6 @@ def window_fingerprint(task):
     return fingerprint(task, *tests, extra=section(read(Path(task) / "README.md"), "## Verification") or "")
 
 
-def validated_fingerprints(task):
-    return {part: fingerprint(task, part) for part in VALIDATED}
-
-
 def load_progress(task):
     try:
         return json.loads(read(Path(task) / PROGRESS) or "{}")
@@ -501,20 +468,10 @@ def load_progress(task):
 
 
 def save_progress(task, progress):
-    progress["about"] = ("Written by tools/hw: fingerprints of what the student approved and what passed "
-                         "validation. Don't edit by hand.")
+    progress["about"] = "Written by tools/hw: fingerprints of what the student approved. Don't edit by hand."
     path = Path(task) / PROGRESS
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(progress, indent=2, sort_keys=True) + "\n")
-
-
-def runs(task):
-    """Rows of the Runs table in authoring/attempts.md, as lists of cells."""
-    rows = []
-    for line in (section(read(Path(task) / "authoring/attempts.md"), "## Runs") or "").splitlines():
-        if line.startswith("|") and not re.match(r"^\|\s*(Date\b|:?-)", line):
-            rows.append([cell.strip() for cell in line.strip().strip("|").split("|")])
-    return rows
+    write(path, json.dumps(progress, indent=2, sort_keys=True) + "\n")
 
 
 def status_note(task):
@@ -536,7 +493,21 @@ def find_pr(c, branch):
     return None
 
 
-def approve_next(what, progress, task):
+def pr_checks(pr):
+    """'passed', 'failed', or 'waiting' for the class checks on a pull request."""
+    code, out, _ = run(["gh", "pr", "view", str(pr["number"]), "--repo", CLASS_REPO, "--json", "statusCheckRollup"])
+    if code != 0:
+        return "waiting"
+    checks = json.loads(out or "{}").get("statusCheckRollup") or []
+    results = [(ch.get("conclusion") or ch.get("state") or "").upper() for ch in checks]
+    if any(r in ("FAILURE", "ERROR", "TIMED_OUT", "CANCELLED", "STARTUP_FAILURE") for r in results):
+        return "failed"
+    if results and all(r in ("SUCCESS", "NEUTRAL", "SKIPPED") for r in results):
+        return "passed"
+    return "waiting"
+
+
+def approve_next(what, progress):
     before = progress.get(what, {}).get("approved")
     change = {"instruction": "The instruction", "window": "The tests or the README's Verification section",
               "publish": "The task"}[what]
@@ -547,8 +518,10 @@ def approve_next(what, progress, task):
                        "their own terminal:"}[what]
     if before:
         text = f"{change} changed after the student approved it ({before[:10]}). " + text
-    step = {"instruction": "Step 3b", "window": "Step 3e", "publish": "Step 5"}[what]
-    return Next("student", text, [f"cd {show(ROOT)} && {HW} approve {what}"], step=step)
+    if WINDOWS:
+        text += " (PowerShell or Windows Terminal)"
+    step = {"instruction": "Step 3b", "window": "Step 3e", "publish": "Step 4"}[what]
+    return Next("student", text, [student_cmd(f"approve {what}")], step=step)
 
 
 def task_items(c, task, check_pr=True):
@@ -580,14 +553,14 @@ def task_items(c, task, check_pr=True):
          "Write the instruction. The student writes it, or rewrites your draft in their own words.", "Step 3b")
     if items[-1].ok:
         ok = progress.get("instruction", {}).get("fingerprint") == fingerprint(task, "instruction.md")
-        add("approve-instruction", ok, "the student approved the instruction", None if ok else approve_next("instruction", progress, task))
+        add("approve-instruction", ok, "the student approved the instruction", None if ok else approve_next("instruction", progress))
     else:
         add("approve-instruction", None, "the student approved the instruction")
     part("solution", ("solution",), "reference solution", "you", "Write the reference solution.", "Step 3c")
     part("tests", ("tests",), "verifier tests", "you", "Write the verifier's tests.", "Step 3d")
     if items[-1].ok and not groups["window"]:
         ok = progress.get("window", {}).get("fingerprint") == window_fingerprint(task)
-        add("window", ok, "the student approved the acceptance window", None if ok else approve_next("window", progress, task))
+        add("window", ok, "the student approved the acceptance window", None if ok else approve_next("window", progress))
     elif items[-1].ok:
         part("window", ("window",), "the student approved the acceptance window", "together",
              "Choose the acceptance window with the student, and write why in the README's Verification section.", "Step 3e")
@@ -596,26 +569,14 @@ def task_items(c, task, check_pr=True):
     part("metadata", ("metadata", "readme"), "task.toml metadata and README", "you",
          "Fill in task.toml's [task] and [metadata] fields, and the README.", "Step 3f")
 
-    # 9. valid on the current files
-    record = progress.get("validated", {})
-    current = validated_fingerprints(task)
-    stale = [p for p in VALIDATED if record.get("fingerprint", {}).get(p) != current[p]]
-    if not stale:
-        add("valid", True, f"valid: reference 1, nothing 0 ({record.get('at', '')[:10]})")
-    else:
-        why = f"Changed since the last validation: {', '.join(stale)}. " if record else ""
-        add("valid", False, "valid: the reference solution scores 1, doing nothing scores 0", Next(
-            "you", why + "Check the task is valid: the reference solution must score 1, doing nothing 0. It takes a "
-            "few minutes; the first Docker build is the slow part.", [f"{HW} validate"], step="Step 4"))
-
-    # 10. the student approved publishing exactly these files
+    # 9. the student approved publishing exactly these files
     if all(i.ok for i in items):
         ok = progress.get("publish", {}).get("fingerprint") == fingerprint(task)
-        add("publish", ok, "the student approved publishing", None if ok else approve_next("publish", progress, task))
+        add("publish", ok, "the student approved publishing", None if ok else approve_next("publish", progress))
     else:
         add("publish", None, "the student approved publishing")
 
-    # 11. the pull request
+    # 10. the pull request, and what CI said about it
     if not all(i.ok for i in items) or not check_pr:
         add("pr", None, "pull request open")
         return items
@@ -626,44 +587,52 @@ def task_items(c, task, check_pr=True):
     elif pr is None:
         add("pr", False, "pull request open", Next(
             "together", "Ask the student which AI agent(s) helped build the task, and how, in a sentence or two. "
-            "Then commit, push and open the pull request:", [f'{HW} submit --ai "<their answer>"'], step="Step 5"))
+            "Then commit, push and open the pull request:", [f'{HW} submit --ai "<their answer>"'], step="Step 4"))
     elif pr["state"] == "MERGED":
         add("pr", True, f"pull request merged: {pr['url']}")
     else:
         dirty = git("status", "--porcelain", "--", rel(task))
         ahead = run(["git", "rev-list", "--count", f"origin/{branch}..HEAD"])
+        checks = pr_checks(pr)
+        c._pr = dict(pr, checks=checks)
         if dirty or ahead[0] != 0 or ahead[1] != "0":
             add("pr", False, f"pull request open: {pr['url']}", Next(
-                "you", "Push the latest changes to the open pull request:", [f"{HW} submit"], step="Step 5"))
+                "you", "Push the latest changes to the open pull request:", [f"{HW} submit"], step="Step 4"))
+        elif checks == "failed":
+            add("pr", False, f"pull request open: {pr['url']}, but the class checks failed", Next(
+                "together", "GitHub ran the task and it failed: the reference solution must score 1 and doing nothing "
+                "0. Read why, fix the task, and submit again (the student approves the changes first):",
+                [f"gh pr checks {pr['number']} --repo {CLASS_REPO}",
+                 f"gh run view <run-id from the line above> --repo {CLASS_REPO} --log-failed"], step="Step 4"))
         else:
-            add("pr", True, f"pull request open: {pr['url']}")
+            add("pr", True, f"pull request open: {pr['url']}" + (", checks passed" if checks == "passed" else ""))
     return items
 
 
-# ---------------------------------------------------------------- tools/hw (status)
+# ---------------------------------------------------------------- uv run tools/hw.py (status)
 
-PLAN = """\
+PLAN = f"""\
 PLAN: what happens, start to finish. Show this to the student before anything else.
 
-  1. Set up this computer (once). The agent checks what's installed and fixes what's missing.
-     You do a few things yourself, in your own terminal: log in to GitHub, and install Docker
-     if it isn't there yet (a large download).
+  1. Set up (once). The agent checks git and GitHub and fixes what's missing. You do one
+     thing yourself, in your own terminal: log in to GitHub.
   2. Choose the task. The agent asks about your research, and together you pick the hardest
      problem in your field that a program can still check.
   3. Build it. The agent writes the container, the reference solution and the tests. You write
      the instruction (or rewrite the agent's draft) and decide what counts as a right answer.
-  4. Test it. Your reference solution must pass, and doing nothing must fail.
-  5. Submit. You check what will become public, and the agent opens your pull request. That's
-     the end of week 1. The instructor then runs frontier AI agents on every task.
+  4. Submit. You check what will become public, and the agent opens your pull request. That's
+     the end of week 1. From there the instructor runs everything: GitHub checks that your
+     reference solution passes and doing nothing fails, then frontier AI agents try your task.
 
   You sign off three times by typing "yes" in your own terminal: the instruction, the
   acceptance window, and publishing. Nothing of yours is public before the last one.
-  All of it usually takes a few sessions of 1-2 hours. Run tools/hw any time to see where
-  you are."""
+  All of it usually takes a few sessions of 1-2 hours. Run {HW} any time to see
+  where you are."""
 
 
 def cmd_plan(args):
     print(PLAN)
+
 
 def mark(item, first):
     return "[x]" if item.ok else ("[!]" if item is first else "[ ]")
@@ -672,7 +641,7 @@ def mark(item, first):
 def status(c=None):
     c = c or Ctx()
     setup = setup_items(c)
-    ready = all(i.ok for i in setup if i.key in ("where", "gh", "login", "fork", "uv")) and sys.version_info >= (3, 11)
+    ready = all(i.ok for i in setup if i.key in ("where", "gh", "login", "fork"))
     task, tasks = find_task(c) if ready else (None, [])
 
     print(f"Homework bookkeeper, {WEEK}. Run every command from {show(ROOT)}.")
@@ -713,17 +682,16 @@ def status(c=None):
     print()
     if first_setup:
         first_setup.next.show()
-        if first_setup.key == "docker" and first_task and first_task.key not in ("valid", "publish", "pr"):
-            print()
-            first_task.next.show(heading="MEANWHILE")
     elif first_task:
         first_task.next.show()
     else:
         pr = c._pr or {}
-        Next("done", f"Week {WEEK_N} is submitted: {pr.get('url', '')}. The instructor will run frontier AI agents "
-             "on it. GitHub runs the checks; on a first pull "
-             "request they wait until the instructor approves the run, so \"awaiting approval\" is normal. To see "
-             "them:", [f"gh pr checks {pr.get('number', '')} --repo {CLASS_REPO}"]).show()
+        checks = {"passed": "GitHub's check passed: your reference solution scores 1 and doing nothing scores 0.",
+                  "waiting": "GitHub's check (your reference solution must score 1, doing nothing 0) runs once the "
+                             "instructor approves it, so \"awaiting approval\" is normal. Run this again later to see "
+                             "the result."}.get(pr.get("checks"), "")
+        Next("done", f"Week {WEEK_N} is submitted: {pr.get('url', '')}. {checks} From here the instructor runs "
+             "frontier AI agents on every task.").show()
     if task:
         print(f'\nBefore ending a session: {HW} note "<where we are, what\'s next>"')
     return setup, items
@@ -747,13 +715,8 @@ def current_task(c, arg=None):
 
 
 def cmd_new(args):
-    need_uv_python()
     c = Ctx()
-    for item in setup_items(c):
-        if item.key not in ("docker", "example") and not item.ok:
-            print("Finish setup first.\n")
-            (item.next or Next("you", f"Run {HW} to see what's missing.")).show()
-            sys.exit(1)
+    require_setup(c)
     name = args.name
     if not SLUG.match(name):
         sys.exit("A task name is lowercase words joined by hyphens, e.g. aurora-oval-boundary.")
@@ -772,18 +735,13 @@ def cmd_new(args):
             sys.exit(f"Couldn't switch to branch {branch}:\n{err}")
         print(f"On branch {branch}.")
     email = git("config", "user.email")
-    email = email if email.endswith("@users.noreply.github.com") else ""
-    author = git("config", "user.name") or c.login
-    p = subprocess.run(["bash", str(ROOT / "tools/new_task.sh"), c.login, name, author] + ([email] if email else []),
-                       cwd=str(ROOT), env=dict(tool_env(), WEEK=WEEK))
-    if p.returncode != 0:
-        sys.exit(p.returncode)
-    print()
+    scaffold(task, c.login, git("config", "user.name") or c.login,
+             email if email.endswith("@users.noreply.github.com") else "")
+    print(f"Created {rel(task)} from the class templates.\n")
     status(Ctx())
 
 
 def cmd_check(args):
-    need_uv_python()
     task = current_task(Ctx(), args.task)
     groups, warnings, check_task = lint(task)
     labels = {"layout": "folder layout", "files": "file sizes and secrets", "environment": "data and environment (Step 3a)",
@@ -806,85 +764,8 @@ def cmd_check(args):
     sys.exit(1 if count else 0)
 
 
-def run_validation(task):
-    """tools/validate.sh on a task, streaming its output. Returns (passed, job folder)."""
-    start = datetime.datetime.now().timestamp()
-    code = subprocess.run(["bash", str(ROOT / "tools/validate.sh"), rel(task)], cwd=str(ROOT), env=tool_env()).returncode
-    jobs = [p for p in (ROOT / "jobs/validate").glob(Path(task).name + "-*") if p.stat().st_mtime >= start - 5]
-    job = max(jobs, key=lambda p: p.stat().st_mtime) if jobs else None
-    if code != 0 and job and "RewardFileNotFoundError" in read(job / "oracle.log") and not list(job.glob("oracle/*/verifier/*")):
-        print("\nThe verifier left no files at all. Usually Docker can't see this folder (keep the repository under "
-              f"the home folder), or a Docker build failed: read {rel(job / 'oracle.log')}.")
-    return code == 0, (rel(job) if job else "")
-
-
-def require_docker(c):
-    for item in setup_items(c):
-        if item.key == "docker" and not item.ok:
-            print("Docker isn't ready.\n")
-            if item.next:
-                item.next.show()
-            sys.exit(1)
-
-
-def cmd_test_setup(args):
-    need_uv_python()
-    c = Ctx()
-    require_docker(c)
-    print(f"Running the class example ({EXAMPLE}) to check Docker and Harbor work here.\n")
-    passed, _ = run_validation(ROOT / EXAMPLE)
-    if not passed:
-        print("\nThe example failed on this machine, so the problem is the setup, not a task. Read the error above; "
-              "SKILL.md Step 4 lists the usual causes.")
-        sys.exit(1)
-    state = c.local_state()
-    state["setup_test"] = {"at": now(), "harbor": HARBOR}
-    c.save_local_state(state)
-    print(f"\nSetup works. Next: {HW}")
-
-
-def cmd_validate(args):
-    need_uv_python()
-    c = Ctx()
-    task = current_task(c, args.task)
-    require_docker(c)
-    if rel(task) == EXAMPLE:
-        return cmd_test_setup(args)
-    passed, job = run_validation(task)
-    progress = load_progress(task)
-    if not passed:
-        progress.pop("validated", None)
-        save_progress(task, progress)
-        print(f"\nNot valid yet. Fix what failed above, then run {HW} validate again. Job folders: {job}")
-        sys.exit(1)
-    progress["validated"] = {"at": now(), "job": job, "fingerprint": validated_fingerprints(task)}
-    save_progress(task, progress)
-    if not any(r[1].lower() == "oracle" for r in runs(task) if len(r) > 1):
-        append_runs(task, [[today(), "oracle", "—", "1", "Reference solution scores 1 (tools/hw validate)."],
-                           [today(), "nop", "—", "0", "Doing nothing scores 0 (tools/hw validate)."]])
-    print(f"\nRecorded as valid. Next: {HW}")
-
-
-def append_runs(task, rows):
-    path = Path(task) / "authoring/attempts.md"
-    lines = read(path).rstrip("\n").splitlines()
-    new = ["| " + " | ".join(str(cell).replace("|", "/").replace("\n", " ").strip() for cell in row) + " |" for row in rows]
-    start = next((i for i, line in enumerate(lines) if line.strip() == "## Runs"), None)
-    if start is None:
-        lines += ["", "## Runs", "", "| Date | Agent | Model | Reward | What happened |", "|---|---|---|---|---|"] + new
-    else:
-        end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
-        table = [i for i in range(start, end) if lines[i].startswith("|")]
-        if not table:
-            new = ["", "| Date | Agent | Model | Reward | What happened |", "|---|---|---|---|---|"] + new
-        at = table[-1] + 1 if table else end
-        lines[at:at] = new
-    path.write_text("\n".join(lines) + "\n")
-
-
 def cmd_note(args):
-    c = Ctx()
-    task = current_task(c)
+    task = current_task(Ctx())
     path = task / "authoring/attempts.md"
     text = read(path)
     body = f"## Status\n\n{args.text.strip()} ({today()})\n\n"
@@ -892,18 +773,18 @@ def cmd_note(args):
         text = re.sub(r"^## Status[ \t]*\n.*?(?=^## |\Z)", lambda m: body, text, count=1, flags=re.M | re.S)
     else:
         text = text.rstrip("\n") + "\n\n" + body
-    path.write_text(text.rstrip("\n") + "\n")
+    write(path, text.rstrip("\n") + "\n")
     print(f"Saved in {rel(path)}. The next session starts from it.")
 
 
 def cmd_approve(args):
     what = args.what
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
-        print("This step is the student's: they approve by typing in their own terminal window.")
-        print(f"Ask them to run this, and wait until they say it's done:\n\n    cd {show(ROOT)} && {HW} approve {what}\n")
+        print("This step is the student's: they approve by typing in their own terminal window"
+              + (" (PowerShell or Windows Terminal)." if WINDOWS else "."))
+        print(f"Ask them to run this, and wait until they say it's done:\n\n    {student_cmd(f'approve {what}')}\n")
         print("Never run it for them or feed it input.")
         sys.exit(2)
-    need_uv_python()
     c = Ctx()
     task = current_task(c)
     groups, _, _ = lint(task)
@@ -915,7 +796,7 @@ def cmd_approve(args):
         sys.exit(1)
     rule = "-" * 72
     if what == "instruction":
-        body = "\n".join(l for l in read(task / "instruction.md").splitlines() if "harbor-canary" not in l).strip()
+        body = "\n".join(line for line in read(task / "instruction.md").splitlines() if "harbor-canary" not in line).strip()
         print(f"{rule}\nThe instruction the AI agent will get ({rel(task / 'instruction.md')}):\n{rule}\n{body}\n{rule}\n")
         points = ["You wrote it, or rewrote the agent's draft in your own words, and you stand behind every sentence.",
                   "An expert in your field could solve the task from this text and the data alone.",
@@ -925,7 +806,7 @@ def cmd_approve(args):
         verification = section(read(task / "README.md"), "## Verification") or ""
         print(f"{rule}\nWhy this acceptance window (README.md, Verification):\n{rule}\n{verification}\n")
         for test in sorted((task / "tests").glob("test_*.py")):
-            code = "\n".join(l for l in read(test).splitlines() if "harbor-canary" not in l).strip()
+            code = "\n".join(line for line in read(test).splitlines() if "harbor-canary" not in line).strip()
             print(f"{rule}\nThe checks ({rel(test)}):\n{rule}\n{code}\n")
         print(rule + "\n")
         points = ["Answers from the good methods an expert might use land inside the window.",
@@ -970,12 +851,11 @@ def pr_body(c, task, ai):
     import tomllib
     config = tomllib.loads(read(task / "task.toml"))
     progress = load_progress(task)
-    when = lambda key, field: (progress.get(key, {}).get(field) or "")[:10]
-    folder = rel(task)
+    when = lambda key: (progress.get(key, {}).get("approved") or "")[:10]
     return f"""## Submission
 
 - **Week:** {WEEK_N}
-- **Folder:** `{folder}`
+- **Folder:** `{rel(task)}`
 - **In one sentence:** {config.get('task', {}).get('description', '').strip()}
 
 ## Checklist
@@ -984,24 +864,19 @@ def pr_body(c, task, ai):
 - [x] No API keys, tokens or passwords anywhere
 - [x] Any data is mine to share, or openly licensed (source named)
 - [x] I agree to license this submission under this repository's MIT license
-- [x] For a benchmark task: `tools/validate.sh` says "Task is valid", and I wrote the instruction myself (or rewrote and approved every sentence)
+- [x] For a benchmark task: I wrote the instruction myself (or rewrote and approved every sentence)
 
 ## AI use
 
 {ai.strip()}
 
-<sub>Recorded by `tools/hw`: instruction approved {when('instruction', 'approved')}, acceptance window approved {when('window', 'approved')}, valid {when('validated', 'at')}, publishing approved {when('publish', 'approved')}.</sub>
+<sub>Recorded by `tools/hw`: instruction approved {when('instruction')}, acceptance window approved {when('window')}, publishing approved {when('publish')}.</sub>
 """
 
 
 def cmd_submit(args):
-    need_uv_python()
     c = Ctx()
-    for item in setup_items(c):
-        if item.key not in ("docker", "example") and not item.ok:
-            print("Setup isn't done.\n")
-            (item.next or Next("you", f"Run {HW}.")).show()
-            sys.exit(1)
+    require_setup(c)
     task = current_task(c)
     items = task_items(c, task)
     missing = next((i for i in items if i.key != "pr" and not i.ok), None)
@@ -1035,7 +910,7 @@ def cmd_submit(args):
 
     branch = BRANCH_PREFIX + task.name
     title = f"[week {WEEK_N}] {task.name}"
-    steps = [["git", "add", "--", rel(task)]]
+    add = ["git", "add", "--", rel(task)]
     commit = ["git", "commit", "-q", "-m", ("Update " if pr else "Add ") + task.name]
     push = ["git", "push", "-u", "origin", branch]
     body_path = Path(tempfile.gettempdir()) / f"hw-pr-{task.name}.md"
@@ -1043,16 +918,15 @@ def cmd_submit(args):
               "--title", title, "--body-file", str(body_path)]
     if args.dry_run:
         print("Dry run. Would run:")
-        for cmd in steps + [commit, push] + ([] if pr else [create]):
+        for cmd in [add, commit, push] + ([] if pr else [create]):
             print("    " + " ".join(shlex.quote(part) for part in cmd))
         if not pr:
             print("\nwith this pull request description:\n")
             print(pr_body(c, task, args.ai))
         return
-    for cmd in steps:
-        code, out, err = run(cmd)
-        if code != 0:
-            sys.exit(f"{' '.join(cmd)} failed:\n{err or out}")
+    code, out, err = run(add)
+    if code != 0:
+        sys.exit(f"git add failed:\n{err or out}")
     if run(["git", "diff", "--cached", "--quiet"])[0] != 0:
         code, out, err = run(commit)
         if code != 0:
@@ -1065,7 +939,7 @@ def cmd_submit(args):
     if pr:
         print(f"The pull request updates by itself: {pr['url']}")
     else:
-        body_path.write_text(pr_body(c, task, args.ai))
+        write(body_path, pr_body(c, task, args.ai))
         code, out, err = run(create, timeout=120)
         body_path.unlink()
         if code != 0:
@@ -1075,9 +949,9 @@ def cmd_submit(args):
 
 
 def main():
-    if sys.version_info < (3, 8):
-        sys.exit("tools/hw needs Python 3.8 or newer. Install uv: curl -LsSf https://astral.sh/uv/install.sh | sh")
-    sys.stdout.reconfigure(line_buffering=True)  # keep our lines in order with the tools we run
+    if sys.version_info < (3, 11):
+        sys.exit("Run this through uv, from the repository root: uv run tools/hw.py")
+    sys.stdout.reconfigure(line_buffering=True, errors="replace")
     parser = argparse.ArgumentParser(prog=HW, description="The homework bookkeeper: where you are, and the one next step.")
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("status", help="the checklist and the next step (the default)")
@@ -1086,9 +960,6 @@ def main():
     p.add_argument("name", help="lowercase words joined by hyphens, e.g. aurora-oval-boundary")
     p = sub.add_parser("check", help="the static checks CI runs, grouped by step")
     p.add_argument("task", nargs="?", help="a task folder (default: yours)")
-    p = sub.add_parser("validate", help="reference solution must score 1, doing nothing 0; records the result")
-    p.add_argument("task", nargs="?", help="a task folder (default: yours)")
-    sub.add_parser("test-setup", help="run the class example once, to check Docker and Harbor work here")
     p = sub.add_parser("approve", help="the student signs off, in their own terminal")
     p.add_argument("what", choices=["instruction", "window", "publish"])
     p = sub.add_parser("note", help="leave a note for the next session: where we are, what's next")
@@ -1097,8 +968,8 @@ def main():
     p.add_argument("--ai", help="which AI agent(s) helped build the task, and how")
     p.add_argument("--dry-run", action="store_true", help="show what would happen, change nothing")
     args = parser.parse_args()
-    commands = {"plan": cmd_plan, "new": cmd_new, "check": cmd_check, "validate": cmd_validate, "test-setup": cmd_test_setup,
-                "approve": cmd_approve, "note": cmd_note, "submit": cmd_submit}
+    commands = {"plan": cmd_plan, "new": cmd_new, "check": cmd_check, "approve": cmd_approve,
+                "note": cmd_note, "submit": cmd_submit}
     if args.command in commands:
         commands[args.command](args)
     else:

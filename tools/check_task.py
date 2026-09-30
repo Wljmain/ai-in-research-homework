@@ -1,9 +1,9 @@
 """Static checks for a class task: layout, task.toml, instruction, verifier isolation, size, secrets.
 
-Fast (no Docker). Run it through tools/hw check or tools/validate.sh, or directly:
+Fast (no Docker). Run it through `uv run tools/hw.py check` or tools/validate.sh, or directly:
     uv run --python 3.12 tools/check_task.py week-1/submissions/<github-username>/<task-name>
 Exit code 1 if any check fails. Warnings don't fail. Each failure names the part of the task it
-belongs to (PARTS, in the order a task is built), so tools/hw can say which step to fix.
+belongs to (PARTS, in the order a task is built), so tools/hw.py can say which step to fix.
 """
 import re
 import sys
@@ -39,7 +39,7 @@ def warn(part, message, hint):
 
 def read(path):
     try:
-        return path.read_text()
+        return path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return ""
 
@@ -67,7 +67,7 @@ def check(task):
     ]
     for rel in required:
         if not (task / rel).is_file():
-            fail("layout", f"missing {rel}", "tools/hw new creates every required file; copy the missing one from templates/ or week-1/example/.")
+            fail("layout", f"missing {rel}", "`uv run tools/hw.py new` creates every required file; copy the missing one from templates/ or week-1/example/.")
     if not list((task / "tests").glob("test_*.py")):
         fail("layout", "no tests/test_*.py", "The verifier's checks live in pytest files named test_*.py.")
     if failures:

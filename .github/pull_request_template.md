@@ -10,7 +10,7 @@
 - [ ] No API keys, tokens or passwords anywhere
 - [ ] Any data is mine to share, or openly licensed (source named)
 - [ ] I agree to license this submission under this repository's MIT license
-- [ ] For a benchmark task: `tools/validate.sh` says "Task is valid", and I wrote the instruction myself (or rewrote and approved every sentence)
+- [ ] For a benchmark task: I wrote the instruction myself (or rewrote and approved every sentence)
 
 ## AI use
 
