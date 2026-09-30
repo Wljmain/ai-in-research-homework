@@ -13,7 +13,7 @@ from pathlib import Path
 
 MAINTAINERS = {"huangzesen"}
 NAME = r"[a-z0-9]+(?:-[a-z0-9]+)*"
-TASK_DIR = re.compile(rf"^week-[0-9]+/(submissions/[A-Za-z0-9-]+/{NAME}|example/{NAME})$")
+TASK_DIR = re.compile(rf"^week-[0-9]+/submissions/[A-Za-z0-9-]+/{NAME}$")
 TASK_WEEKS = {"week-1"}  # weeks whose submissions must be a benchmark task
 
 event = os.environ.get("EVENT", "")
@@ -23,9 +23,7 @@ author = author_login.lower()
 
 
 def every_task():
-    found = list(Path(".").glob("week-*/example/*/task.toml")) + list(Path(".").glob("week-*/submissions/*/*/task.toml"))
-    found = [p.parent for p in found]
-    return sorted(str(p) for p in found)
+    return sorted(str(p.parent) for p in Path(".").glob("week-*/submissions/*/*/task.toml"))
 
 
 def changed_files():
@@ -53,8 +51,6 @@ else:
         candidate = None
         if parts[0].startswith("week-") and len(parts) > 3 and parts[1] == "submissions":
             candidate = "/".join(parts[:4])
-        elif parts[0].startswith("week-") and len(parts) > 2 and parts[1] == "example":
-            candidate = "/".join(parts[:3])
         if candidate and (Path(candidate) / "task.toml").is_file():
             targets.add(candidate)
     targets = sorted(targets)

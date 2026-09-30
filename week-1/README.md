@@ -33,7 +33,7 @@ README.md             difficulty, reference solution, verification
 authoring/            how the data and reference were made, a log of runs
 ```
 
-It counts when your reference solution scores 1, an agent that does nothing scores 0, and the automatic checks pass. The [format example](example/solar-wind-spectral-index/) shows every file. It is deliberately easy; its README ends with how that same problem would become hard.
+It counts when your reference solution scores 1, an agent that does nothing scores 0, and the automatic checks pass.
 
 ## Over the quarter
 

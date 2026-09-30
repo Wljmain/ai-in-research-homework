@@ -22,10 +22,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-      - name: The plan, and the static checks on the example (default shell; PowerShell on Windows)
-        run: |
-          uv run tools/hw.py plan
-          uv run tools/hw.py check week-1/example/solar-wind-spectral-index
+      - name: The plan (default shell; PowerShell on Windows)
+        run: uv run tools/hw.py plan
       - name: A task made from the templates parses, and fails the checks for its placeholders
         shell: bash
         run: |

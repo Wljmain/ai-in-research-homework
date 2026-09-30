@@ -56,10 +56,10 @@ def check(task):
     owner = None
     if len(parts) >= 4 and parts[-3] == "submissions" and parts[-4].startswith("week-"):
         owner = parts[-2]
-    elif not (len(parts) >= 3 and parts[-2] == "example" and parts[-3].startswith("week-")):
+    else:
         fail("layout", "the task is not at week-<n>/submissions/<github-username>/<task-name>/", "Move it there; CI only accepts that layout.")
     if not SLUG.match(name):
-        fail("layout", f"task folder name '{name}' is not lowercase-with-hyphens", "Rename it, e.g. solar-wind-spectral-index.")
+        fail("layout", f"task folder name '{name}' is not lowercase-with-hyphens", "Rename it: lowercase words joined by hyphens.")
 
     required = [
         "task.toml", "instruction.md", "README.md", "environment/Dockerfile", "solution/solve.sh",
@@ -67,7 +67,7 @@ def check(task):
     ]
     for rel in required:
         if not (task / rel).is_file():
-            fail("layout", f"missing {rel}", "`uv run tools/hw.py new` creates every required file; copy the missing one from templates/ or week-1/example/.")
+            fail("layout", f"missing {rel}", "`uv run tools/hw.py new` creates every required file; copy the missing one from templates/.")
     if not list((task / "tests").glob("test_*.py")):
         fail("layout", "no tests/test_*.py", "The verifier's checks live in pytest files named test_*.py.")
     if failures:
@@ -167,7 +167,7 @@ def check(task):
     for heading, part in README_SECTIONS.items():
         body, prompt = section(readme, heading), section(template, heading)
         if not body or len(body) < 40:
-            fail(part, f"README.md section '{heading}' is missing or too short", "A few real sentences each; see week-1/example/.")
+            fail(part, f"README.md section '{heading}' is missing or too short", "A few real sentences each.")
         elif prompt and prompt.split("\n")[0][:40] in body:
             fail(part, f"README.md section '{heading}' still has the template's prompt", "Replace it with your own sentences.")
 

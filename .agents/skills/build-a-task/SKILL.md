@@ -110,8 +110,6 @@ Then propose **two or three concrete task ideas** drawn from their answers. For 
 - Deliver more: not "compute X", but find which quantity matters, measure the system's own parameters, or produce a full pipeline's final product.
 - Withhold more: don't give the method, the fitting range or the model; use real instrument data with its gaps, artifacts and systematics; build a long pipeline where an early mistake silently corrupts the final answer.
 
-Show them the worked example, `week-1/example/solar-wind-spectral-index/`. It shows the *format* and is deliberately easy. Its README's last section shows how that same problem becomes hard.
-
 The task must still be:
 - **Verifiable by a program:** a number in a window, a set of detected events, fitted parameters, a file with required properties. Not an opinion or prose.
 - **Solvable by a top expert** from the instruction and data alone, with a reference answer you trust.
@@ -126,8 +124,6 @@ The task must still be:
 `uv run tools/hw.py new` creates `week-1/submissions/<github-username>/<task-name>/` on its own branch, `week1-<task-name>`. It copies the class templates, in Harbor's task format with a separate offline verifier, plus the README sections and `authoring/attempts.md`, and fills in the student's name, GitHub username and GitHub's private email address in `task.toml`. Walk the student through the new folder: which part is which of the four parts.
 
 ## Step 3: Build the four parts
-
-Follow `week-1/example/solar-wind-spectral-index/` for structure and style. Its files are working models.
 
 The containers only ever run on GitHub and on the instructor's machine, never here. So write each file carefully, and check the logic you can on this computer: run the solution's Python on the data with uv (pointed at the local copy of the data), then run the tests' checks on its output.
 
@@ -167,7 +163,7 @@ Either way, the student should understand the method and agree it's how an exper
 A tolerance is fair only if good methods pass and wrong ones fail. **The student decides the window.** For week 1:
 - Write two or three sentences in the README's Verification section: why this window? Which reasonable choices (a different window function, fitting method or bin size) still land inside it?
 - **Don't ask for a famous number.** If the answer is a textbook constant (−5/3, 5/3, 2.0, 1 AU), an agent can pass by recalling it without doing the work. Check that the textbook guess falls *outside* the window; if it doesn't, choose data whose true answer is away from the default.
-- Level 2 turns this into a script (`authoring/evidence/calibrate.py`) that runs several good and wrong methods; the example has one. It's optional in week 1.
+- Level 2 turns this into a script (`authoring/evidence/calibrate.py`) that runs several good and wrong methods. It's optional in week 1.
 - Then the student reviews the tests and the Verification section, and approves: **(student runs this)** `uv run tools/hw.py approve window`.
 
 ### 3f. Metadata and write-up
@@ -199,7 +195,7 @@ When the student comes back to improve their task, run `uv run tools/hw.py`, the
 
 ## Hard rules
 
-- Only change files under `week-1/submissions/<github-username>/`. Never edit another student's task, the tools, the templates or the examples in a PR.
+- Only change files under `week-1/submissions/<github-username>/`. Never edit another student's task, the tools or the templates in a PR.
 - Never put answers where the agent can see them: not in `environment/`, not in the instruction, not in file names.
 - Never run the student-at-the-keyboard commands yourself, and never let a secret appear in this conversation or in git. If a secret was ever committed, it must be revoked with the provider; deleting the file doesn't make it safe.
 - Never edit `authoring/progress.json`, and never run `uv run tools/hw.py approve` for the student or feed it input.
