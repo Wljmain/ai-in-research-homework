@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
-    paths: ["tasks/**", "examples/**", "tools/**", "templates/**"]
+    paths: ["week-*/**", "tools/**", "templates/**"]
   workflow_dispatch:
 
 permissions:

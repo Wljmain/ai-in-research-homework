@@ -2,7 +2,9 @@
 # Scaffolds a class task: Harbor's layout, the class task.toml defaults, a separate offline
 # verifier, the README sections and the attempts log.
 # Usage: tools/new_task.sh <github-username> <task-name> "Your Name" [email]
+# Creates week-1/submissions/<github-username>/<task-name>/ (set WEEK=week-N for another week).
 set -euo pipefail
+WEEK="${WEEK:-week-1}"
 HARBOR_VERSION=0.23.0
 usage='usage: tools/new_task.sh <github-username> <task-name> "Your Name" [email]'
 user="${1:?$usage}"
@@ -19,14 +21,15 @@ if [[ ! "$name" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
   echo "Task name must be lowercase words joined by hyphens, e.g. exoplanet-transit-depth." >&2
   exit 1
 fi
-dir="$root/tasks/$user/$name"
+base="$root/$WEEK/submissions/$user"
+dir="$base/$name"
 if [ -e "$dir" ]; then
   echo "$dir already exists." >&2
   exit 1
 fi
 
-mkdir -p "$root/tasks/$user"
-uvx "harbor@$HARBOR_VERSION" task init "ai-in-research-homework/$name" -p "$root/tasks/$user" \
+mkdir -p "$base"
+uvx "harbor@$HARBOR_VERSION" task init "ai-in-research-homework/$name" -p "$base" \
   --include-canary-strings --metadata-template "$root/templates/task.toml" \
   --author "$author${email:+ <$email>}" >/dev/null
 
@@ -46,6 +49,6 @@ for key, value in (("author_name", author), ("author_email", email), ("github_us
 open(path, "w").write(text)
 PY
 
-echo "Created tasks/$user/$name"
+echo "Created $WEEK/submissions/$user/$name"
 if [ -n "$email" ]; then echo "Note: $email is now in task.toml, which becomes public when you open a pull request."; fi
-echo "Next: write instruction.md, environment/, solution/ and tests/, then run: tools/validate.sh tasks/$user/$name"
+echo "Next: write instruction.md, environment/, solution/ and tests/, then run: tools/validate.sh $WEEK/submissions/$user/$name"

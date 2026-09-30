@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Is this task valid? Static checks, then the reference solution must score 1 and an agent that
 # does nothing must score 0. CI runs exactly this on every pull request.
-# Usage: tools/validate.sh tasks/<github-username>/<task-name>
+# Usage: tools/validate.sh week-1/submissions/<github-username>/<task-name>
 set -uo pipefail
 HARBOR_VERSION=0.23.0
-task="${1:?usage: tools/validate.sh tasks/<github-username>/<task-name>}"
+task="${1:?usage: tools/validate.sh week-1/submissions/<github-username>/<task-name>}"
 task="${task%/}"
 root="$(cd "$(dirname "$0")/.." && pwd)"
 

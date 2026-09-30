@@ -1,15 +1,11 @@
 # AGENTS.md
 
-This repository collects science benchmark tasks built by the students, auditors and faculty of UCLA's **AI in Research** class (EPSS 254, Fall 2026), in the [Harbor](https://github.com/harbor-framework/harbor) task format, following [Terminal-Bench-Science](https://github.com/harbor-framework/terminal-bench-science) conventions.
+This is the homework repository of UCLA's **AI in Research** class (EPSS 254, Fall 2026). Each week's assignment is in `week-<n>/README.md`. Submissions go in `week-<n>/submissions/<github-username>/`, by pull request from the student's fork.
 
-**If the user wants to create, continue, test, improve or submit their class task (the week 1 homework or later), read `.agents/skills/build-a-task/SKILL.md` now and follow it from the top.** It explains your role: you guide the student and do the engineering; they are the scientist.
+**Week 1, and any later work on a benchmark task:** read `.agents/skills/build-a-task/SKILL.md` now and follow it from the top. It explains your role: you guide the student and do the engineering; they are the scientist.
 
 Map:
-- `tasks/<github-username>/<task-name>/`: student tasks, one folder per student
-- `examples/`: worked examples; start with `solar-wind-spectral-index/`
-- `templates/`: class defaults used by `tools/new_task.sh`
-- `tools/new_task.sh`: scaffold a task
-- `tools/validate.sh`: static checks, then oracle must score 1 and nop must score 0 (CI runs the same)
-- `tools/check_task.py`: the static checks alone
+- `week-<n>/`: the assignment (`README.md`), an example, and `submissions/`
+- `templates/`, `tools/`: shared scaffolding and checks (see `tools/README.md`); CI runs `tools/validate.sh` on every benchmark task
 
-Rules: only edit files under `tasks/<github-username>/`; never commit secrets; always run Harbor as `uvx harbor@0.23.0`.
+Rules: only edit files under `week-<n>/submissions/<github-username>/`; never commit secrets; always run Harbor as `uvx harbor@0.23.0`.

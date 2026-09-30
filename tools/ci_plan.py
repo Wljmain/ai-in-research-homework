@@ -1,4 +1,5 @@
-"""CI helper: which task folders to validate, and whether a pull request stays in its author's folder.
+"""CI helper: which task folders to validate, and whether a pull request stays in its author's folders
+(week-<n>/submissions/<author>/ for any week).
 
 Reads EVENT, BASE (a commit to diff against) and AUTHOR from the environment; writes
 `tasks=<json list>` to $GITHUB_OUTPUT (or prints it).
@@ -11,7 +12,9 @@ import sys
 from pathlib import Path
 
 MAINTAINERS = {"huangzesen"}
-TASK_DIR = re.compile(r"^(tasks/[A-Za-z0-9-]+/[a-z0-9]+(?:-[a-z0-9]+)*|examples/[a-z0-9]+(?:-[a-z0-9]+)*)$")
+NAME = r"[a-z0-9]+(?:-[a-z0-9]+)*"
+TASK_DIR = re.compile(rf"^week-[0-9]+/(submissions/[A-Za-z0-9-]+/{NAME}|example/{NAME})$")
+TASK_WEEKS = {"week-1"}  # weeks whose submissions must be a benchmark task
 
 event = os.environ.get("EVENT", "")
 base = os.environ.get("BASE", "")
@@ -20,7 +23,8 @@ author = author_login.lower()
 
 
 def every_task():
-    found = [p.parent for p in Path("examples").glob("*/task.toml")] + [p.parent for p in Path("tasks").glob("*/*/task.toml")]
+    found = list(Path(".").glob("week-*/example/*/task.toml")) + list(Path(".").glob("week-*/submissions/*/*/task.toml"))
+    found = [p.parent for p in found]
     return sorted(str(p) for p in found)
 
 
@@ -34,9 +38,10 @@ def changed_files():
 changed = changed_files()
 
 if event == "pull_request" and author not in MAINTAINERS and changed is not None:
-    outside = [f for f in changed if not f.lower().startswith(f"tasks/{author}/")]
+    mine = re.compile(rf"^week-[0-9]+/submissions/{re.escape(author)}/")
+    outside = [f for f in changed if not mine.match(f.lower())]
     if outside:
-        print(f"::error::A pull request may only change files under tasks/{author_login}/. Also changed: {', '.join(outside[:10])}")
+        print(f"::error::A pull request may only change files under week-<n>/submissions/{author_login}/. Also changed: {', '.join(outside[:10])}")
         sys.exit(1)
 
 if changed is None or event == "workflow_dispatch" or any(f.startswith(("tools/", "templates/")) for f in changed):
@@ -45,21 +50,28 @@ else:
     targets = set()
     for f in changed:
         parts = f.split("/")
-        candidate = "/".join(parts[:3]) if parts[0] == "tasks" else "/".join(parts[:2]) if parts[0] == "examples" else None
+        candidate = None
+        if parts[0].startswith("week-") and len(parts) > 3 and parts[1] == "submissions":
+            candidate = "/".join(parts[:4])
+        elif parts[0].startswith("week-") and len(parts) > 2 and parts[1] == "example":
+            candidate = "/".join(parts[:3])
         if candidate and (Path(candidate) / "task.toml").is_file():
             targets.add(candidate)
     targets = sorted(targets)
 
-if event == "pull_request" and author not in MAINTAINERS and changed and not targets:
-    added = [f for f in changed if Path(f).exists()]
-    if added:
-        print(f"::error::No task found. A task folder must be tasks/{author_login}/<task-name>/ with a task.toml directly inside it. "
-              "Run tools/new_task.sh to create one in the right place.")
+if changed is not None:
+    present = [f for f in changed if Path(f).exists()]
+    misplaced = [f for f in present if Path(f).name == "task.toml" and str(Path(f).parent) not in targets]
+    missing = event == "pull_request" and author not in MAINTAINERS and not targets and any(
+        f.split("/")[0] in TASK_WEEKS for f in present)
+    if misplaced or missing:
+        print(f"::error::No valid task found. A task is a folder week-<n>/submissions/{author_login}/<task-name>/ "
+              "with task.toml directly inside it. Run tools/new_task.sh to create one in the right place.")
         sys.exit(1)
 
 bad = [t for t in targets if not TASK_DIR.match(t)]
 if bad:
-    print(f"::error::Task folders must be tasks/<github-username>/<lowercase-hyphenated-name>: {', '.join(bad)}")
+    print(f"::error::Task folders must be week-<n>/submissions/<github-username>/<lowercase-hyphenated-name>: {', '.join(bad)}")
     sys.exit(1)
 
 line = f"tasks={json.dumps(targets)}"

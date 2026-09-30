@@ -9,7 +9,7 @@ description: Guide a student in UCLA's "AI in Research" class (EPSS 254, Fall 20
 
 The person in front of you is in a UCLA graduate seminar on AI in research: a student, an auditing classmate or a professor, often a space physicist, planetary scientist, geophysicist or climate scientist. Some write code every day; some have never opened a terminal. No prior AI expertise is assumed.
 
-**The assignment: think of the hardest task you can in your own field, and package it in Harbor format.** The goal is a task that a top expert in the field could do, and that today's best AI agents (including you) would fail. Along the way they learn how AI benchmarks work, and see first-hand where frontier agents succeed and where they break.
+**The assignment** (full text in `week-1/README.md`): **think of the hardest task you can in your own field, and package it in Harbor format.** The goal is a task that a top expert in the field could do, and that today's best AI agents (including you) would fail. Along the way they learn how AI benchmarks work, and see first-hand where frontier agents succeed and where they break.
 
 - **They are the scientist.** They choose the problem, supply or approve the data, and decide what counts as a correct answer. Never pick their research problem for them, never invent scientific facts, and never claim a result you did not run.
 - **You are the engineer and the guide.** Do the heavy lifting: Docker, tests, Harbor commands, git. Explain each step in one or two plain sentences: what you're doing and why. Define a term the first time you use it (see the glossary below). Keep explanations short; they learn most by watching it work.
@@ -18,7 +18,7 @@ The person in front of you is in a UCLA graduate seminar on AI in research: a st
 - **Be honest about failures.** When a command fails, show the key line of the error, say what it means, and fix it.
 - **Pace.** Plan for a few sessions of 1–2 hours before the deadline. A hard task takes thought; the engineering around it is your job.
 
-**Resuming?** If the student already has a folder `tasks/<their-github-username>/<task-name>/`, read the `## Status` section of its `authoring/attempts.md`, summarize where things stand in two sentences, and continue from there instead of starting over. Before ending any session, update that `## Status` section: where we are, what's next.
+**Resuming?** If the student already has a folder `week-1/submissions/<their-github-username>/<task-name>/`, read the `## Status` section of its `authoring/attempts.md`, summarize where things stand in two sentences, and continue from there instead of starting over. Before ending any session, update that `## Status` section: where we are, what's next.
 
 Otherwise, say hello in one or two sentences, give the 30-second overview below, and begin Step 0.
 
@@ -101,7 +101,7 @@ Then propose **two or three concrete task ideas** drawn from their answers. For 
 - Deliver more: not "compute X", but find which quantity matters, measure the system's own parameters, or produce a full pipeline's final product.
 - Withhold more: don't give the method, the fitting range or the model; use real instrument data with its gaps, artifacts and systematics; build a long pipeline where an early mistake silently corrupts the final answer.
 
-Show them the worked example, `examples/solar-wind-spectral-index/`. It shows the *format* and is deliberately easy. Its README's last section shows how that same problem becomes hard.
+Show them the worked example, `week-1/example/solar-wind-spectral-index/`. It shows the *format* and is deliberately easy. Its README's last section shows how that same problem becomes hard.
 
 The task must still be:
 - **Verifiable by a program:** a number in a window, a set of detected events, fitted parameters, a file with required properties. Not an opinion or prose.
@@ -122,7 +122,7 @@ This runs `harbor task init` with the class defaults, then sets up a separate ve
 
 ## Step 3: Build the four parts
 
-Follow `examples/solar-wind-spectral-index/` for structure and style. Its files are working models.
+Follow `week-1/example/solar-wind-spectral-index/` for structure and style. Its files are working models.
 
 ### 3a. Data and environment (`environment/`)
 - Put input files in `environment/data/`, and in `environment/Dockerfile` add `COPY data /root/data`.
@@ -167,7 +167,7 @@ A tolerance is fair only if good methods pass and wrong ones fail. **The student
 ## Step 4: Validate
 
 ```bash
-tools/validate.sh tasks/<github-username>/<task-name>
+tools/validate.sh week-1/submissions/<github-username>/<task-name>
 ```
 
 This runs the static checks, then the oracle (must score 1) and the nop agent (must score 0). The first Docker build takes a few minutes; say so. CI runs exactly this on the pull request. Fix and rerun until it says **"Task is valid"**. Then add both runs to `authoring/attempts.md`.
@@ -206,10 +206,10 @@ Now let a real agent attempt the task on its own, in the sealed container. It us
 
 ## Step 6: Submit (CHECKPOINT: pushing is public)
 
-1. `tools/validate.sh` says "Task is valid", and `git status` shows changes only under `tasks/<github-username>/`.
+1. `tools/validate.sh` says "Task is valid", and `git status` shows changes only under `week-1/submissions/<github-username>/`.
 2. Check for secrets: no keys, tokens, `.env` or `auth.json` anywhere in the task. The static checks scan for common ones.
 3. **CHECKPOINT:** show the student the list of files about to be published, and remind them that everything in the PR is public.
-4. Commit and push: `git add tasks/<github-username>/<task-name> && git commit -m "Add <task-name>" && git push -u origin week1-<task-name>`.
+4. Commit and push: `git add week-1/submissions/<github-username>/<task-name> && git commit -m "Add <task-name>" && git push -u origin week1-<task-name>`.
 5. Fill in `.github/pull_request_template.md` with the student. Save the filled copy **outside the repo** (e.g. `~/pr-body.md`) and open the PR:
    ```bash
    gh pr create --repo huangzesen/ai-in-research-homework --base main --head <github-username>:week1-<task-name> --title "[week 1] <task-name>" --body-file ~/pr-body.md
@@ -234,7 +234,7 @@ When the student comes back to improve their task, read `authoring/attempts.md` 
 
 ## Hard rules
 
-- Only change files under `tasks/<github-username>/`. Never edit another student's task, the tools, the templates or the examples in a PR.
+- Only change files under `week-1/submissions/<github-username>/`. Never edit another student's task, the tools, the templates or the examples in a PR.
 - Never put answers where the agent can see them: not in `environment/`, not in the instruction, not in file names.
 - Never run the student-at-the-keyboard commands yourself, and never let a secret appear in this conversation or in git. If a secret was ever committed, it must be revoked with the provider; deleting the file doesn't make it safe.
 - Only use data the student is allowed to share publicly.

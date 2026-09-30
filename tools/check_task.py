@@ -1,7 +1,7 @@
 """Static checks for a class task: layout, task.toml, instruction, verifier isolation, size, secrets.
 
 Fast (no Docker). Run it through tools/validate.sh, or directly:
-    uv run --python 3.12 tools/check_task.py tasks/<github-username>/<task-name>
+    uv run --python 3.12 tools/check_task.py week-1/submissions/<github-username>/<task-name>
 Exit code 1 if any check fails. Warnings don't fail.
 """
 import re
@@ -44,10 +44,10 @@ def check(task):
     parts = task.resolve().parts
     name = task.resolve().name
     owner = None
-    if len(parts) >= 3 and parts[-3] == "tasks":
+    if len(parts) >= 4 and parts[-3] == "submissions" and parts[-4].startswith("week-"):
         owner = parts[-2]
-    elif not (len(parts) >= 2 and parts[-2] == "examples"):
-        fail("the task is not at tasks/<github-username>/<task-name>/", "Move it there; CI only accepts that layout.")
+    elif not (len(parts) >= 3 and parts[-2] == "example" and parts[-3].startswith("week-")):
+        fail("the task is not at week-<n>/submissions/<github-username>/<task-name>/", "Move it there; CI only accepts that layout.")
     if not SLUG.match(name):
         fail(f"task folder name '{name}' is not lowercase-with-hyphens", "Rename it, e.g. solar-wind-spectral-index.")
 
@@ -57,7 +57,7 @@ def check(task):
     ]
     for rel in required:
         if not (task / rel).is_file():
-            fail(f"missing {rel}", "tools/new_task.sh creates every required file; copy the missing one from templates/ or examples/.")
+            fail(f"missing {rel}", "tools/new_task.sh creates every required file; copy the missing one from templates/ or week-1/example/.")
     if not list((task / "tests").glob("test_*.py")):
         fail("no tests/test_*.py", "The verifier's checks live in pytest files named test_*.py.")
     if failures:
@@ -86,7 +86,7 @@ def check(task):
         fail(f"[metadata] domain is {meta.get('domain')!r}", "Use one of: " + ", ".join(sorted(DOMAINS)) + ".")
     if owner and str(meta.get("github_username", "")).lower() != owner.lower():
         fail(f"[metadata] github_username is {meta.get('github_username')!r}, folder owner is '{owner}'",
-             "Set github_username to your GitHub username, the same as your folder under tasks/.")
+             "Set github_username to your GitHub username, the same as your folder under submissions/.")
 
     verifier = config.get("verifier", {})
     if verifier.get("environment_mode") != "separate":
@@ -153,7 +153,7 @@ def check(task):
     for section in ("## Difficulty", "## Reference solution", "## Verification"):
         match = re.search(re.escape(section) + r"\s*\n(.*?)(?=\n## |\Z)", readme, re.S)
         if not match or len(re.sub(r"<!--.*?-->", "", match.group(1), flags=re.S).strip()) < 40:
-            fail(f"README.md section '{section}' is missing or too short", "A few real sentences each; see examples/.")
+            fail(f"README.md section '{section}' is missing or too short", "A few real sentences each; see week-1/example/.")
 
     # --- size and secrets
     total = 0
@@ -177,7 +177,7 @@ def check(task):
 
 def main():
     if len(sys.argv) != 2:
-        sys.exit("usage: check_task.py tasks/<github-username>/<task-name>")
+        sys.exit("usage: check_task.py week-1/submissions/<github-username>/<task-name>")
     task = Path(sys.argv[1])
     if not task.is_dir():
         sys.exit(f"{task} is not a folder")
