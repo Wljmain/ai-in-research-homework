@@ -15,6 +15,8 @@ Aim high. An AI coding agent does the engineering with you; you bring the scienc
 
 It walks you through setup, finding the hardest problem you can still verify, building and testing the task, letting a frontier agent attempt it, and opening your pull request.
 
+Coming back later? Open your agent in your clone of this repository and give it the same line. It picks up where you left off.
+
 **You'll need:** a [GitHub account](https://github.com/signup), [Docker](https://www.docker.com/products/docker-desktop/), [uv](https://docs.astral.sh/uv/) and an AI coding agent. Your agent helps you install the rest. No AI subscription? Codex works with a free ChatGPT account, and GitHub Copilot is free for verified students.
 
 ## What you submit

@@ -22,8 +22,8 @@ To start any week, open the week's folder below, or its page on [class.xhelio.ai
 
 ## Under the hood
 
-- [`tools/`](tools/): scripts that scaffold, check and run submissions; CI uses the same ones
-- [`.agents/skills/`](.agents/skills/): the guides your AI agent reads
+- [`tools/`](tools/): `tools/hw`, the checklist your agent follows, and the scripts that scaffold, check and run submissions; CI uses the same checks
+- [`.agents/skills/build-a-task/SKILL.md`](.agents/skills/build-a-task/SKILL.md): the guide your AI agent reads
 
 ## License
 

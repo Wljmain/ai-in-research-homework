@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Scaffolds a class task: Harbor's layout, the class task.toml defaults, a separate offline
 # verifier, the README sections and the attempts log.
-# Usage: tools/new_task.sh <github-username> <task-name> "Your Name" [email]
+# Usage: tools/new_task.sh <github-username> <task-name> "Your Name" [email]   (tools/hw new runs this for you)
 # Creates week-1/submissions/<github-username>/<task-name>/ (set WEEK=week-N for another week).
 set -euo pipefail
 WEEK="${WEEK:-week-1}"
@@ -51,4 +51,4 @@ PY
 
 echo "Created $WEEK/submissions/$user/$name"
 if [ -n "$email" ]; then echo "Note: $email is now in task.toml, which becomes public when you open a pull request."; fi
-echo "Next: write instruction.md, environment/, solution/ and tests/, then run: tools/validate.sh $WEEK/submissions/$user/$name"
+echo "Next: run tools/hw to see the next step."

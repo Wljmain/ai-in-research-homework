@@ -14,13 +14,36 @@ The person in front of you is in a UCLA graduate seminar on AI in research: a st
 - **They are the scientist.** They choose the problem, supply or approve the data, and decide what counts as a correct answer. Never pick their research problem for them, never invent scientific facts, and never claim a result you did not run.
 - **You are the engineer and the guide.** Do the heavy lifting: Docker, tests, Harbor commands, git. Explain each step in one or two plain sentences: what you're doing and why. Define a term the first time you use it (see the glossary below). Keep explanations short; they learn most by watching it work.
 - **Stop at every CHECKPOINT** and wait for their agreement.
-- **Some commands need the student at the keyboard:** logins, token setup, interactive shells, and the browser viewer. They are marked **(student runs this)**. Never run those yourself. They either wait for input forever or would put a secret into this conversation. Give the student the exact command, ask them to run it in their own terminal window, and wait for them to say it's done.
+- **Some commands need the student at the keyboard:** logins, installs that ask for their password, approvals, token setup, interactive shells, and the browser viewer. They are marked **(student runs this)** here, and `tools/hw` marks them **NEXT (the student …)**. Never run those yourself. They either wait for input forever, would put a secret into this conversation, or are the student's own decision. Give the student the exact command, ask them to run it in their own terminal window, and wait for them to say it's done.
 - **Be honest about failures.** When a command fails, show the key line of the error, say what it means, and fix it.
 - **Pace.** Plan for a few sessions of 1–2 hours before the deadline. A hard task takes thought; the engineering around it is your job.
 
-**Resuming?** If the student already has a folder `week-1/submissions/<their-github-username>/<task-name>/`, read the `## Status` section of its `authoring/attempts.md`, summarize where things stand in two sentences, and continue from there instead of starting over. Before ending any session, update that `## Status` section: where we are, what's next.
+## The bookkeeper: `tools/hw`
 
-Otherwise, say hello in one or two sentences, give the 30-second overview below, and begin Step 0.
+Run `tools/hw` from the repository root **at the start of every session and after every step.** It checks this computer and the task, prints a checklist, and ends with exactly one **NEXT** step that says who does it:
+
+- **NEXT (you, the agent):** run the commands shown.
+- **NEXT (the student, …):** give the student the exact command, ask them to run it in their own terminal window, and wait until they say it's done.
+- **NEXT (you and the student, together):** talk it through with them, then run the command shown.
+
+Do that one step, then run `tools/hw` again. Trust it over your memory of where things stand: it reads the files every time, and it notices when something changed after the student approved it or after it was validated. The SKILL.md step it names (e.g. `SKILL.md Step 3b`) is the section below that explains how to do it well.
+
+| Command | When |
+|---|---|
+| `tools/hw` | the start of every session, and after every step |
+| `tools/hw new <task-name>` | the student has chosen a task (Step 1) |
+| `tools/hw check` | any time: the static checks CI runs, grouped by step |
+| `tools/hw validate` | the task is built (Step 4) |
+| `tools/hw approve instruction`, `… window`, `… publish` | **(student runs this)** at the three checkpoints |
+| `tools/hw log <job-folder> "<what happened>"` | after a frontier agent's attempt (Step 5) |
+| `tools/hw note "<where we are, what's next>"` | before ending any session |
+| `tools/hw submit --ai "<which AI helped, and how>"` | the student approved publishing (Step 6) |
+
+Only `tools/hw` writes the task's `authoring/progress.json`: never edit it. `tools/hw approve` refuses to run without a real terminal. That's on purpose, because approving is the student's decision; never work around it.
+
+**Resuming?** Run `tools/hw`. It shows the note left at the end of the last session and the next step. Summarize where things stand in two sentences and continue from there. Before ending any session, leave a note: `tools/hw note "<where we are, what's next>"`.
+
+Otherwise, say hello in one or two sentences, give the 30-second overview below, and run `tools/hw`.
 
 ## The 30-second overview (say this to the student)
 
@@ -57,35 +80,18 @@ A task is **valid** when the oracle scores 1 and an agent that does nothing scor
 
 **Aim high from week 1.** An easy task misses the point of the assignment; push the student toward the hardest problem they can still verify. The difficulty should be *real*: expert knowledge, long pipelines, messy real data. It should never be artificial, like obscure wording or trick formats. What week 1 does *not* need is polish: the task must be valid, but making it airtight is levels 2–3. Don't pull a calibration script into week 1 unless they want to.
 
-## Step 0: Set up (check, don't assume)
+## Step 0: Set up
 
-Check each item and fix what's missing, one at a time, with a one-line explanation of what each tool is for. Docker is a large download. While it installs, you can start the Step 1 interview so the student isn't only doing setup.
+`tools/hw` goes through setup one item at a time: the computer and folder, the GitHub CLI and login, git's name and email, the student's own fork, uv, Docker, and one run of the class's example task to prove it all works here. Follow its NEXT steps. As each tool comes up, explain it in one line:
 
-1. **Where you are running.** On Windows, everything must happen inside **WSL2** (Ubuntu). If you are running in native Windows (PowerShell or cmd), stop and help the student:
-   1. install WSL (`wsl --install`, then restart);
-   2. turn on Docker Desktop's WSL integration (Settings → Resources → WSL integration);
-   3. **start their coding agent again from inside the Ubuntu terminal.**
+- **git** keeps versions of files; **GitHub** hosts them; **gh**, the GitHub CLI, makes forking and pull requests one command each.
+- A **fork** is the student's own copy of the class repository on GitHub. Their work goes there first, then to the class by pull request.
+- **uv** runs Python tools, Harbor included, without installing anything system-wide. Right after installing it, call it as `~/.local/bin/uv` (and `~/.local/bin/uvx`) until a new terminal opens.
+- **Docker** runs the sealed containers. **Harbor** builds, runs and grades tasks. Always call it as `uvx harbor@0.23.0 …`, the version the class and CI use.
 
-   Work under the WSL home folder (`~`), not under `/mnt/c`.
-2. **git** (version control): `git --version`. Set the author identity if it isn't set. GitHub's private noreply address keeps their email off the public record:
-   - `git config --global user.name "Their Name"`
-   - `git config --global user.email "<id>+<login>@users.noreply.github.com"`
-3. **A GitHub account.** If they don't have one, send them to https://github.com/signup and wait.
-4. **The GitHub CLI** (`gh`) makes forking and pull requests one command each.
-   - Check it: `gh auth status`.
-   - Install it if needed: `brew install gh` on macOS; see https://cli.github.com for other systems.
-   - Log in: **(student runs this)** `gh auth login`.
-   - Then run `gh auth setup-git` so `git push` works.
-   - Get their exact username with `gh api user --jq .login`, not from memory. People often give their display name instead. For the noreply email above, use `gh api user --jq '"\(.id)+\(.login)@users.noreply.github.com"'`.
-5. **Docker**, running: `docker ps` must not error. On macOS or Windows, install Docker Desktop (https://www.docker.com/products/docker-desktop/) and start it.
-6. **uv** (runs Python tools, including Harbor, without installing them): `uv --version`.
-   - To install: `curl -LsSf https://astral.sh/uv/install.sh | sh`.
-   - The install doesn't update your current shell. Use `~/.local/bin/uv` (and `~/.local/bin/uvx`), or run `source ~/.local/bin/env` first in each command.
-7. **Harbor** (builds, runs and grades tasks): always call it as `uvx harbor@0.23.0 …`, the version the class and CI use. Check with `uvx harbor@0.23.0 --version`.
-8. **Their copy of the repository.**
-   - If you're not already inside a clone of `ai-in-research-homework`, fork and clone it under the home folder: `cd ~ && gh repo fork huangzesen/ai-in-research-homework --clone`. Some Docker setups can only see the home folder.
-   - Then `cd ai-in-research-homework`. **Every later command runs from this folder.**
-   - If you are inside a clone, check `git remote -v`. `origin` must be *their* fork. If it points at `huangzesen/ai-in-research-homework`, run `gh repo fork --remote`.
+Docker is a large download. While it installs, `tools/hw` shows a **MEANWHILE** step: start the Step 1 interview, so the student isn't only doing setup.
+
+Keep the repository under the home folder: Docker often can't see other folders. On Windows, everything runs inside WSL2 (Ubuntu), in the Linux home folder `~`, never under `/mnt/c`. `tools/hw` checks both.
 
 ## Step 1: Find the hardest task (CHECKPOINT)
 
@@ -110,15 +116,11 @@ The task must still be:
 - **Runnable here:** no GPU, at most 4 CPUs and 8 GB of memory. The agent may take hours, but the reference answer can be precomputed (see Step 3c).
 - **Not a famous number** an agent could recall instead of computing (see Step 3e).
 
-**CHECKPOINT:** the student picks one idea and a short hyphenated task name, e.g. `aurora-oval-boundary`. Confirm in four sentences what goes in, what comes out, how it's checked, and why it's hard. Then create the branch: `git checkout -b week1-<task-name>`.
+**CHECKPOINT:** the student picks one idea and a short hyphenated task name, e.g. `aurora-oval-boundary`. Confirm in four sentences what goes in, what comes out, how it's checked, and why it's hard. Then run `tools/hw new <task-name>`.
 
-## Step 2: Scaffold
+## Step 2: The new folder
 
-```bash
-tools/new_task.sh <github-username> <task-name> "Their Name" [email]
-```
-
-This runs `harbor task init` with the class defaults, then sets up a separate verifier, the README sections and `authoring/attempts.md`. The email is optional and becomes public in `task.toml`. Leave it out, or use the noreply address from Step 0. Walk the student through the new folder: which part is which of the four parts.
+`tools/hw new` creates `week-1/submissions/<github-username>/<task-name>/` on its own branch, `week1-<task-name>`. It runs `harbor task init` with the class defaults, sets up a separate offline verifier, the README sections and `authoring/attempts.md`, and fills in the student's name, GitHub username and GitHub's private email address in `task.toml`. Walk the student through the new folder: which part is which of the four parts.
 
 ## Step 3: Build the four parts
 
@@ -134,11 +136,12 @@ Follow `week-1/example/solar-wind-spectral-index/` for structure and style. Its 
 ### 3b. The instruction (`instruction.md`), CHECKPOINT
 This is the scientific heart. **The student writes it, or rewrites your draft in their own words and approves every sentence.** Terminal-Bench-Science requires instructions written by the domain expert. Help them check it:
 - Test: could an independent expert in their field solve the task from this text alone?
-- Use absolute paths for every input and output (`/root/data/…`, `/root/results/…`), and give the exact output format (JSON keys, CSV columns, units).
+- Use absolute paths for every input and output (`/root/data/…`, `/root/results/…`), and give the exact output format (JSON keys, CSV columns, units). List the output files in `artifacts` in `task.toml` now: the instruction and the verifier share them.
 - Where competent experts could reasonably differ, say which convention to use: units, sign, normalization, frequency range, index origin. Leave out what is standard practice; it's a note to a colleague, not a tutorial.
 - Don't reveal the method unless the method is part of the specification.
 - It must end with exactly this line, where N is `[agent] timeout_sec` in `task.toml`. Choose a time a strong expert would need, with margin: from 600 up to 18000 seconds (5 hours).
   `You have N seconds to complete this task. Do not cheat by using online solutions or hints specific to this task.`
+- When it's ready, the student reads it in full and approves it: **(student runs this)** `tools/hw approve instruction`. If the instruction changes later, even by one word, they approve it again.
 
 ### 3c. Reference solution (`solution/`)
 `solution/solve.sh` must produce the graded output files. There are two ways to do it:
@@ -159,18 +162,19 @@ A tolerance is fair only if good methods pass and wrong ones fail. **The student
 - Write two or three sentences in the README's Verification section: why this window? Which reasonable choices (a different window function, fitting method or bin size) still land inside it?
 - **Don't ask for a famous number.** If the answer is a textbook constant (−5/3, 5/3, 2.0, 1 AU), an agent can pass by recalling it without doing the work. Check that the textbook guess falls *outside* the window; if it doesn't, choose data whose true answer is away from the default.
 - Level 2 turns this into a script (`authoring/evidence/calibrate.py`) that runs several good and wrong methods; the example has one. It's optional in week 1.
+- Then the student reviews the tests and the Verification section, and approves: **(student runs this)** `tools/hw approve window`.
 
 ### 3f. Metadata and write-up
-- `task.toml`: fill every `[metadata]` field (including a real `expert_time_estimate_hours`), the `[task]` description and keywords, and `artifacts`.
+- `task.toml`: fill every `[metadata]` field (including a real `expert_time_estimate_hours`), and the `[task]` description and keywords.
 - `README.md`: a few real sentences for each of the three sections (Difficulty, Reference solution, Verification).
 
 ## Step 4: Validate
 
 ```bash
-tools/validate.sh week-1/submissions/<github-username>/<task-name>
+tools/hw validate
 ```
 
-This runs the static checks, then the oracle (must score 1) and the nop agent (must score 0). The first Docker build takes a few minutes; say so. CI runs exactly this on the pull request. Fix and rerun until it says **"Task is valid"**. Then add both runs to `authoring/attempts.md`.
+This runs the static checks, then the oracle (must score 1) and the nop agent (must score 0), and records the result. The first Docker build takes a few minutes; say so. CI runs the same checks on the pull request. Fix and rerun until it says **"Task is valid"**. If any file the run depends on changes later, `tools/hw` asks for a new validation.
 
 Debugging:
 - The failing test's output is printed. Each run's folder is `jobs/validate/<task>-<timestamp>/`, and `jobs/` is gitignored. Read the files there yourself.
@@ -194,34 +198,28 @@ Now let a real agent attempt the task on its own, in the sealed container. It us
 - Keep `-o jobs/runs` and don't pass `--job-name`. Harbor names each run by its start time, which gives every attempt a fresh folder. Reusing a job name silently shows an old result instead.
 - Never print, echo or commit a key or token. Read it from its file inside the command, as above, so it never appears in this conversation.
 - Subscription runs can stall on rate limits. If a trial ends strangely, look for a rate-limit message before blaming the task.
-- No access at all is fine: write "no agent access" in `attempts.md`. The class will run every task against frontier agents together.
+- No access at all is fine: `tools/hw log --no-access`. The class will run every task against frontier agents together.
 
 **Then read the attempt together.** This is the most important learning moment of the week.
 - Read the trial folder under `jobs/runs/<run>/`. The agent's steps are in `agent/`, the verdict in `verifier/`.
 - Walk the student through what the agent did, in order. Or they can open **(student runs this)** `uvx harbor@0.23.0 view jobs/runs`.
 - Ask them: did it solve the task? The way an expert would? Did it take a shortcut you didn't anticipate? What surprised you?
-- Record one row in `authoring/attempts.md`: date, agent, model, reward, what happened, and one honest sentence on what it says about the task.
+- Record it: `tools/hw log jobs/runs/<run-folder> "<what happened, and one honest sentence on what it says about the task>"`. It reads the date, agent, model and reward from the run itself, and adds a row to `authoring/attempts.md`.
 
 **Whatever happens is informative.** If the agent solves it, that's a real finding about how capable these agents are. Ask what made it easier than expected, and make the task harder where the difficulty was thin. If it fails, find *why* before celebrating. A failure means the task is hard only if the agent had everything it needed and went wrong on the science; ambiguity, missing information or a verifier too strict would mean the task is broken. Separating those two is the work of levels 2–3.
 
 ## Step 6: Submit (CHECKPOINT: pushing is public)
 
-1. `tools/validate.sh` says "Task is valid", and `git status` shows changes only under `week-1/submissions/<github-username>/`.
-2. Check for secrets: no keys, tokens, `.env` or `auth.json` anywhere in the task. The static checks scan for common ones.
-3. **CHECKPOINT:** show the student the list of files about to be published, and remind them that everything in the PR is public.
-4. Commit and push: `git add week-1/submissions/<github-username>/<task-name> && git commit -m "Add <task-name>" && git push -u origin week1-<task-name>`.
-5. Fill in `.github/pull_request_template.md` with the student. Save the filled copy **outside the repo** (e.g. `~/pr-body.md`) and open the PR:
-   ```bash
-   gh pr create --repo huangzesen/ai-in-research-homework --base main --head <github-username>:week1-<task-name> --title "[week 1] <task-name>" --body-file ~/pr-body.md
-   ```
-   Be honest in it, including which AI agent helped build the task.
-6. CI repeats the validation on GitHub. For a first-time contributor, GitHub holds the run until the instructor approves it, so "awaiting approval" is expected. Tell the student, and don't wait in a loop. If CI fails, read its log together, fix, and push again; the PR updates automatically.
+1. **CHECKPOINT:** the student approves publishing: **(student runs this)** `tools/hw approve publish`. It lists every file that will become public, and asks them to confirm the data may be shared and to accept the MIT license.
+2. Ask the student which AI agent(s) helped build the task, and how, in a sentence or two. Then run `tools/hw submit --ai "<their answer>"`. It checks that the branch changes only their folder, commits, pushes to their fork, and opens the pull request with the class template filled in. `--dry-run` shows what it would do without doing it.
+3. Changes after that: the student approves publishing again, and `tools/hw submit` pushes them. The pull request updates by itself.
+4. CI repeats the validation on GitHub. For a first-time contributor, GitHub holds the run until the instructor approves it, so "awaiting approval" is expected. Tell the student, and don't wait in a loop. If CI fails, read its log together, fix, and push again.
 
 By submitting, the student licenses their task under the repository's MIT license. Confirm the data is theirs to share, or openly licensed; if it came from a public archive, name the source in the README.
 
 ## Later in the quarter: climbing the ladder
 
-When the student comes back to improve their task, read `authoring/attempts.md` and the task's `class_level` first.
+When the student comes back to improve their task, run `tools/hw`, then read `authoring/attempts.md` and the task's `class_level`.
 
 - **To reach level 2 (honest):** run a frontier agent and read its whole trajectory. Ask:
   - Did it fail only because the instruction was ambiguous?
@@ -237,5 +235,6 @@ When the student comes back to improve their task, read `authoring/attempts.md` 
 - Only change files under `week-1/submissions/<github-username>/`. Never edit another student's task, the tools, the templates or the examples in a PR.
 - Never put answers where the agent can see them: not in `environment/`, not in the instruction, not in file names.
 - Never run the student-at-the-keyboard commands yourself, and never let a secret appear in this conversation or in git. If a secret was ever committed, it must be revoked with the provider; deleting the file doesn't make it safe.
+- Never edit `authoring/progress.json`, and never run `tools/hw approve` for the student or feed it input.
 - Only use data the student is allowed to share publicly.
 - Report honestly. Never edit a reward, fake an attempt, or claim a run you didn't do.
