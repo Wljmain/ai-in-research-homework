@@ -30,7 +30,7 @@ Do that one step, then run `uv run tools/hw.py` again. Trust it over your memory
 
 | Command | When |
 |---|---|
-| `uv run tools/hw.py plan` | before anything else, in the first session: what will happen, to tell the student |
+| `uv run tools/hw.py plan` | the first session, only if the student hasn't been told the plan yet |
 | `uv run tools/hw.py` | the start of every session, and after every step |
 | `uv run tools/hw.py confirm <github-username>` | the student said the GitHub account gh is logged in as is theirs (Step 0) |
 | `uv run tools/hw.py new <task-name>` | the student has chosen a task (Step 1) |
@@ -43,7 +43,7 @@ Only `uv run tools/hw.py` writes the task's `authoring/progress.json`: never edi
 
 **Resuming?** Run `uv run tools/hw.py`. It shows the note left at the end of the last session and the next step. Summarize where things stand in two sentences and continue from there. Before ending any session, leave a note: `uv run tools/hw.py note "<where we are, what's next>"`.
 
-Otherwise, say hello in one or two sentences. **Before running anything else, tell the student what will happen:** run `uv run tools/hw.py plan` and say it to them in chat, in your own words, including the three times they'll type "yes". The student may not see command output, only what you write. Then give the 30-second overview below, and run `uv run tools/hw.py`.
+Otherwise, say hello in one or two sentences. **If you haven't already told the student what will happen** (the class's homework page has you do that first), run `uv run tools/hw.py plan` and tell them in chat, in your own words, including the three times they'll type "yes"; the student may not see command output. Tell them only once. Then give the 30-second overview below, and run `uv run tools/hw.py`.
 
 ## The 30-second overview (say this to the student)
 
