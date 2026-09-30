@@ -3,6 +3,7 @@ exactly one NEXT step that says who does it: the agent, the student, or both tog
 
 Run from the repository root:
     tools/hw                                     the checklist and the next step
+    tools/hw plan                                what happens, start to finish (show the student first)
     tools/hw new <task-name>                     create your task folder and its branch
     tools/hw check [task-folder]                 the static checks CI runs, grouped by step
     tools/hw validate                            reference solution must score 1, doing nothing 0
@@ -663,6 +664,29 @@ def task_items(c, task, check_pr=True):
 
 # ---------------------------------------------------------------- tools/hw (status)
 
+PLAN = """\
+PLAN: what happens, start to finish. Show this to the student before anything else.
+
+  1. Set up this computer (once). The agent checks what's installed and fixes what's missing.
+     You do a few things yourself, in your own terminal: log in to GitHub, and install Docker
+     if it isn't there yet (a large download).
+  2. Choose the task. The agent asks about your research, and together you pick the hardest
+     problem in your field that a program can still check.
+  3. Build it. The agent writes the container, the reference solution and the tests. You write
+     the instruction (or rewrite the agent's draft) and decide what counts as a right answer.
+  4. Test it. Your reference solution must pass, and doing nothing must fail. Then, if you have
+     access to one, a frontier AI agent tries your task, and you read its attempt together.
+  5. Submit. You check what will become public, and the agent opens your pull request.
+
+  You sign off three times by typing "yes" in your own terminal: the instruction, the
+  acceptance window, and publishing. Nothing of yours is public before the last one.
+  All of it usually takes a few sessions of 1-2 hours. Run tools/hw any time to see where
+  you are."""
+
+
+def cmd_plan(args):
+    print(PLAN)
+
 def mark(item, first):
     return "[x]" if item.ok else ("[!]" if item is first else "[ ]")
 
@@ -674,6 +698,8 @@ def status(c=None):
     task, tasks = find_task(c) if ready else (None, [])
 
     print(f"Homework bookkeeper, {WEEK}. Run every command from {show(ROOT)}.")
+    if not task and not tasks:
+        print("\n" + PLAN)
     note = status_note(task) if task else ""
     if note:
         print("\nLast session's note:")
@@ -1132,6 +1158,7 @@ def main():
     parser = argparse.ArgumentParser(prog=HW, description="The homework bookkeeper: where you are, and the one next step.")
     sub = parser.add_subparsers(dest="command")
     sub.add_parser("status", help="the checklist and the next step (the default)")
+    sub.add_parser("plan", help="what happens, start to finish: show it to the student first")
     p = sub.add_parser("new", help="create your task folder and its branch")
     p.add_argument("name", help="lowercase words joined by hyphens, e.g. aurora-oval-boundary")
     p = sub.add_parser("check", help="the static checks CI runs, grouped by step")
@@ -1151,7 +1178,7 @@ def main():
     p.add_argument("--ai", help="which AI agent(s) helped build the task, and how")
     p.add_argument("--dry-run", action="store_true", help="show what would happen, change nothing")
     args = parser.parse_args()
-    commands = {"new": cmd_new, "check": cmd_check, "validate": cmd_validate, "test-setup": cmd_test_setup,
+    commands = {"plan": cmd_plan, "new": cmd_new, "check": cmd_check, "validate": cmd_validate, "test-setup": cmd_test_setup,
                 "approve": cmd_approve, "log": cmd_log, "note": cmd_note, "submit": cmd_submit}
     if args.command in commands:
         commands[args.command](args)

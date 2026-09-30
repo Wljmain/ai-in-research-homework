@@ -88,7 +88,7 @@ def check(task):
         fail("metadata", "no [[task.authors]]", 'Add [[task.authors]] with name = "Your Name".')
     for key in ("author_name", "field", "relevant_experience"):
         if not str(meta.get(key, "")).strip():
-            fail("metadata", f"[metadata] {key} is empty", "Fill in every [metadata] field.")
+            fail("metadata", f'[metadata] {key} = "" needs a value', "Fill in every [metadata] field; the comments in task.toml give examples.")
     hours = meta.get("expert_time_estimate_hours", 0)
     if not isinstance(hours, (int, float)) or hours <= 0:
         fail("metadata", "[metadata] expert_time_estimate_hours is not set", "Estimate how many hours a focused top expert needs, e.g. 6.0.")

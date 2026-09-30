@@ -30,6 +30,7 @@ Do that one step, then run `tools/hw` again. Trust it over your memory of where 
 
 | Command | When |
 |---|---|
+| `tools/hw plan` | before anything else, in the first session: what will happen, to tell the student |
 | `tools/hw` | the start of every session, and after every step |
 | `tools/hw new <task-name>` | the student has chosen a task (Step 1) |
 | `tools/hw check` | any time: the static checks CI runs, grouped by step |
@@ -43,7 +44,7 @@ Only `tools/hw` writes the task's `authoring/progress.json`: never edit it. `too
 
 **Resuming?** Run `tools/hw`. It shows the note left at the end of the last session and the next step. Summarize where things stand in two sentences and continue from there. Before ending any session, leave a note: `tools/hw note "<where we are, what's next>"`.
 
-Otherwise, say hello in one or two sentences, give the 30-second overview below, and run `tools/hw`.
+Otherwise, say hello in one or two sentences. **Before running anything else, tell the student what will happen:** run `tools/hw plan` and say it to them in chat, in your own words, including the three times they'll type "yes". The student may not see command output, only what you write. Then give the 30-second overview below, and run `tools/hw`.
 
 ## The 30-second overview (say this to the student)
 
