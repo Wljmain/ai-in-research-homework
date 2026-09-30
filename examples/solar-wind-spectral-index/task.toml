@@ -15,13 +15,14 @@ name = "Zesen Huang"
 [metadata]
 author_name = "Zesen Huang"
 author_organization = "UCLA EPSS"
+github_username = "huangzesen"
 domain = "physical-sciences"
 field = "physics"
 subfield = "space-plasma-physics"
 tags = ["heliophysics", "solar-wind", "turbulence", "spectral-analysis"]
 expert_time_estimate_hours = 0.5
 relevant_experience = "Postdoctoral researcher in space plasma physics; works with spacecraft magnetometer data."
-class_level = 1
+class_level = 0  # format example, deliberately easy
 
 [verifier]
 timeout_sec = 120.0

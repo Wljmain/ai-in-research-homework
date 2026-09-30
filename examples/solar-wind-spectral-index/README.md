@@ -1,10 +1,10 @@
 # Solar-wind spectral index
 
-**Author:** Zesen Huang (UCLA EPSS) · **Field:** physics / space plasma physics · **Class level:** 1 (a valid task) · **Agent budget:** 30 min
+**Author:** Zesen Huang (UCLA EPSS) · **Field:** physics / space plasma physics · **Purpose:** format example · **Agent budget:** 30 min
 
 Estimate the inertial-range spectral index of solar-wind magnetic-field fluctuations from one hour of 4 Hz magnetometer data that has telemetry gaps and instrumental spikes.
 
-This is the worked example for the class. It is a **level 1** task: correctly built and honestly graded, but not yet hard. Frontier agents should solve it. The last section lists what would make it harder.
+This is the class's worked example of the **format**: every file is built and graded the way yours should be. It is **deliberately easy**, and frontier agents should solve it. Your week 1 task should be far harder; the last section shows how this same problem becomes one.
 
 ## Difficulty
 
@@ -39,11 +39,10 @@ The window is calibrated, not "truth ± tolerance". `authoring/evidence/calibrat
 
 Every defensible estimate is steeper than the generating slope, because interpolating across gaps removes high-frequency power. A window centered on −1.30 would have been unfair to good solutions. Every row sits at least 0.02 inside or 0.04 outside the window.
 
-## How this could get harder (levels 2–4)
+## How this would become a hard task
 
-- **Level 2 (honest):** run a frontier agent, read its whole trajectory, and fix anything it exposed about the instruction or the verifier.
-- **Level 3 (hard):** stop telling the solver the inertial range. Ask for the spectral break frequency and the kinetic-range slope as well. Use a real Parker Solar Probe interval, with its reaction-wheel noise lines and irregular gaps.
-- **Level 4 (benchmark-ready):** ask for a quantity no textbook gives, such as the anisotropy of the fluctuations relative to the local mean field. That needs a scale-dependent analysis, and agents tend to fall back on a global mean field.
+- **Deliver more, withhold more:** stop telling the solver the inertial range. Ask for the spectral break frequency and the kinetic-range slope as well. Use a real Parker Solar Probe interval, with its reaction-wheel noise lines and irregular gaps.
+- **Harder still:** ask for a quantity no textbook gives, such as the anisotropy of the fluctuations relative to the local mean field. That needs a scale-dependent analysis, and agents tend to fall back on a global mean field.
 
 ## Attempts
 

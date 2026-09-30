@@ -1,0 +1,6 @@
+# Changes to the shared infrastructure need the instructor's review.
+/tools/ @huangzesen
+/templates/ @huangzesen
+/examples/ @huangzesen
+/.github/ @huangzesen
+/.agents/ @huangzesen

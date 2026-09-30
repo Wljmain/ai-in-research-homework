@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This repository collects science benchmark tasks built by students in UCLA's **AI in Research** class (EPSS 254, Fall 2026), in the [Harbor](https://github.com/harbor-framework/harbor) task format, following [Terminal-Bench-Science](https://github.com/harbor-framework/terminal-bench-science) conventions.
+This repository collects science benchmark tasks built by the students, auditors and faculty of UCLA's **AI in Research** class (EPSS 254, Fall 2026), in the [Harbor](https://github.com/harbor-framework/harbor) task format, following [Terminal-Bench-Science](https://github.com/harbor-framework/terminal-bench-science) conventions.
 
 **If the user wants to create, continue, test, improve or submit their class task (the week 1 homework or later), read `.agents/skills/build-a-task/SKILL.md` now and follow it from the top.** It explains your role: you guide the student and do the engineering; they are the scientist.
 

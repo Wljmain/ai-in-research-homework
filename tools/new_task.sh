@@ -11,6 +11,10 @@ author="${3:?$usage}"
 email="${4:-}"
 root="$(cd "$(dirname "$0")/.." && pwd)"
 
+if [[ ! "$user" =~ ^[A-Za-z0-9-]+$ ]]; then
+  echo "GitHub username should be letters, digits and hyphens only; check it with: gh api user --jq .login" >&2
+  exit 1
+fi
 if [[ ! "$name" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
   echo "Task name must be lowercase words joined by hyphens, e.g. exoplanet-transit-depth." >&2
   exit 1
@@ -43,4 +47,5 @@ open(path, "w").write(text)
 PY
 
 echo "Created tasks/$user/$name"
+if [ -n "$email" ]; then echo "Note: $email is now in task.toml, which becomes public when you open a pull request."; fi
 echo "Next: write instruction.md, environment/, solution/ and tests/, then run: tools/validate.sh tasks/$user/$name"

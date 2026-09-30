@@ -15,7 +15,8 @@ TASK_DIR = re.compile(r"^(tasks/[A-Za-z0-9-]+/[a-z0-9]+(?:-[a-z0-9]+)*|examples/
 
 event = os.environ.get("EVENT", "")
 base = os.environ.get("BASE", "")
-author = os.environ.get("AUTHOR", "").lower()
+author_login = os.environ.get("AUTHOR", "")
+author = author_login.lower()
 
 
 def every_task():
@@ -26,8 +27,8 @@ def every_task():
 def changed_files():
     if not base or set(base) == {"0"}:
         return None
-    diff = subprocess.run(["git", "diff", "--name-only", base, "HEAD"], capture_output=True, text=True)
-    return diff.stdout.split() if diff.returncode == 0 else None
+    diff = subprocess.run(["git", "diff", "--name-only", "-z", base, "HEAD"], capture_output=True, text=True)
+    return [f for f in diff.stdout.split("\0") if f] if diff.returncode == 0 else None
 
 
 changed = changed_files()
@@ -35,7 +36,7 @@ changed = changed_files()
 if event == "pull_request" and author not in MAINTAINERS and changed is not None:
     outside = [f for f in changed if not f.lower().startswith(f"tasks/{author}/")]
     if outside:
-        print(f"::error::A pull request may only change files under tasks/{author}/. Also changed: {', '.join(outside[:10])}")
+        print(f"::error::A pull request may only change files under tasks/{author_login}/. Also changed: {', '.join(outside[:10])}")
         sys.exit(1)
 
 if changed is None or event == "workflow_dispatch" or any(f.startswith(("tools/", "templates/")) for f in changed):
@@ -48,6 +49,13 @@ else:
         if candidate and (Path(candidate) / "task.toml").is_file():
             targets.add(candidate)
     targets = sorted(targets)
+
+if event == "pull_request" and author not in MAINTAINERS and changed and not targets:
+    added = [f for f in changed if Path(f).exists()]
+    if added:
+        print(f"::error::No task found. A task folder must be tasks/{author_login}/<task-name>/ with a task.toml directly inside it. "
+              "Run tools/new_task.sh to create one in the right place.")
+        sys.exit(1)
 
 bad = [t for t in targets if not TASK_DIR.match(t)]
 if bad:

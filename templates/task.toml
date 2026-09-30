@@ -18,7 +18,7 @@ domain = ""        # life-sciences | physical-sciences | earth-sciences | mathem
 field = ""         # e.g. physics, astronomy, geosciences, atmospheric-sciences, biology, chemistry
 subfield = ""      # e.g. space-plasma-physics, seismology
 tags = []
-expert_time_estimate_hours = 0.0   # how long a focused expert needs
+expert_time_estimate_hours = 0.0   # hours a focused top expert needs (must be > 0)
 relevant_experience = ""           # one sentence on your background for this task
 class_level = 1                    # 1 valid, 2 honest, 3 hard, 4 benchmark-ready
 
@@ -30,7 +30,7 @@ environment_mode = "separate"      # the verifier runs in its own clean containe
 network_mode = "no-network"        # the verifier cannot reach the internet
 
 [agent]
-timeout_sec = 1800.0               # at most 3600 for this class
+timeout_sec = 3600.0               # what a strong expert needs, with margin; at most 18000 (5 h)
 
 [environment]
 build_timeout_sec = 600.0

@@ -2,7 +2,6 @@ name: Validate tasks
 
 on:
   pull_request:
-    paths: ["tasks/**", "examples/**", "tools/**", "templates/**"]
   push:
     branches: [main]
     paths: ["tasks/**", "examples/**", "tools/**", "templates/**"]
@@ -10,6 +9,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: validate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   plan:
@@ -26,7 +29,14 @@ jobs:
           EVENT: ${{ github.event_name }}
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
           AUTHOR: ${{ github.event.pull_request.user.login }}
-        run: python3 tools/ci_plan.py
+        # On pull requests, run the base branch's copy of the planner so a PR can't edit its own guard.
+        run: |
+          if [ "$EVENT" = "pull_request" ]; then
+            git show "$BASE:tools/ci_plan.py" > /tmp/ci_plan.py
+          else
+            cp tools/ci_plan.py /tmp/ci_plan.py
+          fi
+          python3 /tmp/ci_plan.py
 
   validate:
     needs: plan

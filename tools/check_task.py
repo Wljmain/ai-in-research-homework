@@ -16,7 +16,10 @@ SUFFIX = "You have {n} seconds to complete this task. Do not cheat by using onli
 SECRETS = re.compile(
     r"sk-ant-[A-Za-z0-9_-]{10,}|sk-[A-Za-z0-9]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}"
     r"|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|-----BEGIN [A-Z ]*PRIVATE KEY-----"
+    r"|eyJ[A-Za-z0-9_-]{20,}\.eyJ[A-Za-z0-9_-]{20,}|\"refresh_token\"\s*:"
 )
+SECRET_FILES = re.compile(r"^(auth\.json|\.env(\..*)?|.*\.pem|.*\.key|credentials(\.json)?)$")
+SKIP_DIRS = {".venv", "venv", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", "node_modules", ".git"}
 MAX_FILE_MB, MAX_TOTAL_MB = 20, 50
 
 failures, warnings = [], []
@@ -41,9 +44,9 @@ def check(task):
     parts = task.resolve().parts
     name = task.resolve().name
     owner = None
-    if "tasks" in parts and parts.index("tasks") == len(parts) - 3:
+    if len(parts) >= 3 and parts[-3] == "tasks":
         owner = parts[-2]
-    elif not ("examples" in parts and parts.index("examples") == len(parts) - 2):
+    elif not (len(parts) >= 2 and parts[-2] == "examples"):
         fail("the task is not at tasks/<github-username>/<task-name>/", "Move it there; CI only accepts that layout.")
     if not SLUG.match(name):
         fail(f"task folder name '{name}' is not lowercase-with-hyphens", "Rename it, e.g. solar-wind-spectral-index.")
@@ -76,6 +79,9 @@ def check(task):
     for key in ("author_name", "field", "relevant_experience"):
         if not str(meta.get(key, "")).strip():
             fail(f"[metadata] {key} is empty", "Fill in every [metadata] field.")
+    hours = meta.get("expert_time_estimate_hours", 0)
+    if not isinstance(hours, (int, float)) or hours <= 0:
+        fail("[metadata] expert_time_estimate_hours is not set", "Estimate how many hours a focused top expert needs, e.g. 6.0.")
     if meta.get("domain") not in DOMAINS:
         fail(f"[metadata] domain is {meta.get('domain')!r}", "Use one of: " + ", ".join(sorted(DOMAINS)) + ".")
     if owner and str(meta.get("github_username", "")).lower() != owner.lower():
@@ -89,8 +95,8 @@ def check(task):
         fail("the verifier can reach the network", 'Add [verifier.environment] with network_mode = "no-network".')
 
     timeout = config.get("agent", {}).get("timeout_sec")
-    if not isinstance(timeout, (int, float)) or not 60 <= timeout <= 3600:
-        fail(f"[agent] timeout_sec is {timeout!r}", "Use 60 to 3600 seconds for class tasks (most need 600-1800).")
+    if not isinstance(timeout, (int, float)) or not 300 <= timeout <= 18000:
+        fail(f"[agent] timeout_sec is {timeout!r}", "Use 300 to 18000 seconds (5 hours): the time a strong expert needs, with margin.")
     env = config.get("environment", {})
     if env.get("gpus", 0) != 0:
         fail("the task asks for a GPU", "CI runners have no GPU; set gpus = 0.")
@@ -152,8 +158,10 @@ def check(task):
     # --- size and secrets
     total = 0
     for path in task.rglob("*"):
-        if not path.is_file():
+        if not path.is_file() or SKIP_DIRS.intersection(path.relative_to(task).parts):
             continue
+        if SECRET_FILES.match(path.name):
+            fail(f"{path.relative_to(task)} looks like a credentials file", "Delete it from the task; credentials never go in git.")
         size = path.stat().st_size
         total += size
         if size > MAX_FILE_MB * 2**20:
