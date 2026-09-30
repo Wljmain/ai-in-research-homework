@@ -1,0 +1,12 @@
+# Harbor job output (runs, trajectories)
+jobs/
+
+# Secrets
+.env
+.env.*
+
+# Python / OS
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
