@@ -12,10 +12,6 @@
 - [ ] I agree to license this submission under this repository's MIT license
 - [ ] For a benchmark task: `tools/validate.sh` says "Task is valid", and I wrote the instruction myself (or rewrote and approved every sentence)
 
-## Frontier agent attempt (benchmark tasks)
-
-Agent, model, reward, and what happened in one or two sentences. Write "no agent access" if you couldn't run one.
-
 ## AI use
 
 Which AI agent(s) helped you, and roughly what they did.

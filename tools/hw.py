@@ -9,8 +9,6 @@ Run from the repository root:
     tools/hw validate                            reference solution must score 1, doing nothing 0
     tools/hw test-setup                          run the class example once: do Docker and Harbor work here?
     tools/hw approve instruction|window|publish  the student signs off, in their own terminal
-    tools/hw log <job-folder> "<what happened>"  record a frontier agent's attempt
-    tools/hw log --no-access                     record that no agent was available
     tools/hw note "<where we are, what's next>"  leave a note for the next session
     tools/hw submit --ai "<which AI helped>"     commit, push and open the pull request
 
@@ -438,7 +436,6 @@ TASK_STEPS = [
     ("window", "the student approved the acceptance window"),
     ("metadata", "task.toml metadata and README"),
     ("valid", "valid: the reference solution scores 1, doing nothing scores 0"),
-    ("attempt", "a frontier agent's attempt recorded"),
     ("publish", "the student approved publishing"),
     ("pr", "pull request open"),
 ]
@@ -520,10 +517,6 @@ def runs(task):
     return rows
 
 
-def frontier_runs(task):
-    return [r for r in runs(task) if len(r) >= 5 and r[1].lower() not in ("oracle", "nop")]
-
-
 def status_note(task):
     note = section(read(Path(task) / "authoring/attempts.md"), "## Status") or ""
     return "" if not note or note.startswith(STATUS_TEMPLATE) else note
@@ -554,7 +547,7 @@ def approve_next(what, progress, task):
                        "their own terminal:"}[what]
     if before:
         text = f"{change} changed after the student approved it ({before[:10]}). " + text
-    step = {"instruction": "Step 3b", "window": "Step 3e", "publish": "Step 6"}[what]
+    step = {"instruction": "Step 3b", "window": "Step 3e", "publish": "Step 5"}[what]
     return Next("student", text, [f"cd {show(ROOT)} && {HW} approve {what}"], step=step)
 
 
@@ -615,29 +608,14 @@ def task_items(c, task, check_pr=True):
             "you", why + "Check the task is valid: the reference solution must score 1, doing nothing 0. It takes a "
             "few minutes; the first Docker build is the slow part.", [f"{HW} validate"], step="Step 4"))
 
-    # 10. a frontier agent's attempt (or a note that there was none)
-    attempts = frontier_runs(task)
-    if attempts:
-        last = attempts[-1]
-        label = "no frontier agent access (recorded)" if last[1].lower() == "none" else \
-            f"frontier attempt recorded: {last[1]}, {last[2]}, reward {last[3]}"
-        add("attempt", True, label)
-    else:
-        add("attempt", False, "a frontier agent's attempt recorded", Next(
-            "together", "Ask the student whether to let a frontier agent try the task; it uses their plan or "
-            "credits. Run it as SKILL.md Step 5 shows, read the attempt together, then record it with what "
-            "happened in one or two honest sentences:",
-            [f'{HW} log jobs/runs/<run-folder> "<what happened>"', f"or, with no agent access: {HW} log --no-access"],
-            step="Step 5"))
-
-    # 11. the student approved publishing exactly these files
+    # 10. the student approved publishing exactly these files
     if all(i.ok for i in items):
         ok = progress.get("publish", {}).get("fingerprint") == fingerprint(task)
         add("publish", ok, "the student approved publishing", None if ok else approve_next("publish", progress, task))
     else:
         add("publish", None, "the student approved publishing")
 
-    # 12. the pull request
+    # 11. the pull request
     if not all(i.ok for i in items) or not check_pr:
         add("pr", None, "pull request open")
         return items
@@ -648,7 +626,7 @@ def task_items(c, task, check_pr=True):
     elif pr is None:
         add("pr", False, "pull request open", Next(
             "together", "Ask the student which AI agent(s) helped build the task, and how, in a sentence or two. "
-            "Then commit, push and open the pull request:", [f'{HW} submit --ai "<their answer>"'], step="Step 6"))
+            "Then commit, push and open the pull request:", [f'{HW} submit --ai "<their answer>"'], step="Step 5"))
     elif pr["state"] == "MERGED":
         add("pr", True, f"pull request merged: {pr['url']}")
     else:
@@ -656,7 +634,7 @@ def task_items(c, task, check_pr=True):
         ahead = run(["git", "rev-list", "--count", f"origin/{branch}..HEAD"])
         if dirty or ahead[0] != 0 or ahead[1] != "0":
             add("pr", False, f"pull request open: {pr['url']}", Next(
-                "you", "Push the latest changes to the open pull request:", [f"{HW} submit"], step="Step 6"))
+                "you", "Push the latest changes to the open pull request:", [f"{HW} submit"], step="Step 5"))
         else:
             add("pr", True, f"pull request open: {pr['url']}")
     return items
@@ -674,9 +652,9 @@ PLAN: what happens, start to finish. Show this to the student before anything el
      problem in your field that a program can still check.
   3. Build it. The agent writes the container, the reference solution and the tests. You write
      the instruction (or rewrite the agent's draft) and decide what counts as a right answer.
-  4. Test it. Your reference solution must pass, and doing nothing must fail. Then, if you have
-     access to one, a frontier AI agent tries your task, and you read its attempt together.
-  5. Submit. You check what will become public, and the agent opens your pull request.
+  4. Test it. Your reference solution must pass, and doing nothing must fail.
+  5. Submit. You check what will become public, and the agent opens your pull request. That's
+     the end of week 1. The instructor then runs frontier AI agents on every task.
 
   You sign off three times by typing "yes" in your own terminal: the instruction, the
   acceptance window, and publishing. Nothing of yours is public before the last one.
@@ -735,14 +713,15 @@ def status(c=None):
     print()
     if first_setup:
         first_setup.next.show()
-        if first_setup.key == "docker" and first_task and first_task.key not in ("valid", "attempt", "publish", "pr"):
+        if first_setup.key == "docker" and first_task and first_task.key not in ("valid", "publish", "pr"):
             print()
             first_task.next.show(heading="MEANWHILE")
     elif first_task:
         first_task.next.show()
     else:
         pr = c._pr or {}
-        Next("done", f"Week {WEEK_N} is submitted: {pr.get('url', '')}. GitHub runs the checks; on a first pull "
+        Next("done", f"Week {WEEK_N} is submitted: {pr.get('url', '')}. The instructor will run frontier AI agents "
+             "on it. GitHub runs the checks; on a first pull "
              "request they wait until the instructor approves the run, so \"awaiting approval\" is normal. To see "
              "them:", [f"gh pr checks {pr.get('number', '')} --repo {CLASS_REPO}"]).show()
     if task:
@@ -903,52 +882,6 @@ def append_runs(task, rows):
     path.write_text("\n".join(lines) + "\n")
 
 
-def cmd_log(args):
-    c = Ctx()
-    task = current_task(c)
-    progress = load_progress(task)
-    if args.no_access:
-        append_runs(task, [[today(), "none", "—", "—", args.what or "No frontier agent access; the class will run this task together."]])
-        print(f"Recorded. Next: {HW}")
-        return
-    if not args.job or not args.what:
-        sys.exit(f'usage: {HW} log <job-folder> "<what happened, in one or two sentences>"')
-    if len(args.what.strip()) < 30:
-        sys.exit("Say what happened in one or two real sentences, after reading the attempt with the student.")
-    job = Path(args.job).resolve()
-    if "jobs/validate" in job.as_posix():
-        sys.exit(f"That's a validation run; {HW} validate records those.")
-    results = [job / "result.json"] if (job / "result.json").is_file() and (job / "agent").is_dir() else sorted(job.glob("*/result.json"))
-    if not results:
-        sys.exit(f"No trial results in {args.job}. Give the run's folder under jobs/runs/.")
-    rows, logged = [], progress.setdefault("logged", [])
-    for path in results:
-        result = json.loads(read(path) or "{}")
-        info = result.get("agent_info") or {}
-        agent = info.get("name") or ((result.get("config") or {}).get("agent") or {}).get("name", "?")
-        model = (info.get("model_info") or {}).get("name") or ((result.get("config") or {}).get("agent") or {}).get("model_name") or "—"
-        if agent in ("oracle", "nop"):
-            sys.exit(f"That's the {agent} agent; {HW} validate records those.")
-        rewards = (result.get("verifier_result") or {}).get("rewards") or {}
-        reward = rewards.get("reward")
-        if reward is None:
-            reward = "error: " + str((result.get("exception_info") or {}).get("exception_type", "no reward"))
-        elif float(reward).is_integer():
-            reward = int(reward)
-        trial = result.get("id") or str(path)
-        if trial in logged:
-            print(f"Already recorded: {path.parent.name}")
-            continue
-        logged.append(trial)
-        rows.append([(result.get("started_at") or today())[:10], agent, model, reward, args.what.strip()])
-    if rows:
-        append_runs(task, rows)
-        save_progress(task, progress)
-        for row in rows:
-            print(f"Recorded: {row[1]}, {row[2]}, reward {row[3]}.")
-    print(f"Next: {HW}")
-
-
 def cmd_note(args):
     c = Ctx()
     task = current_task(c)
@@ -1037,12 +970,6 @@ def pr_body(c, task, ai):
     import tomllib
     config = tomllib.loads(read(task / "task.toml"))
     progress = load_progress(task)
-    attempts = frontier_runs(task)
-    if attempts and attempts[-1][1].lower() != "none":
-        a = attempts[-1]
-        attempt = f"{a[1]}, {a[2]}: reward {a[3]}. {a[4]}"
-    else:
-        attempt = "No agent access."
     when = lambda key, field: (progress.get(key, {}).get(field) or "")[:10]
     folder = rel(task)
     return f"""## Submission
@@ -1058,10 +985,6 @@ def pr_body(c, task, ai):
 - [x] Any data is mine to share, or openly licensed (source named)
 - [x] I agree to license this submission under this repository's MIT license
 - [x] For a benchmark task: `tools/validate.sh` says "Task is valid", and I wrote the instruction myself (or rewrote and approved every sentence)
-
-## Frontier agent attempt (benchmark tasks)
-
-{attempt}
 
 ## AI use
 
@@ -1168,10 +1091,6 @@ def main():
     sub.add_parser("test-setup", help="run the class example once, to check Docker and Harbor work here")
     p = sub.add_parser("approve", help="the student signs off, in their own terminal")
     p.add_argument("what", choices=["instruction", "window", "publish"])
-    p = sub.add_parser("log", help="record a frontier agent's attempt")
-    p.add_argument("job", nargs="?", help="the run's folder, e.g. jobs/runs/2026-10-02__14-03-11")
-    p.add_argument("what", nargs="?", help="what happened, in one or two honest sentences")
-    p.add_argument("--no-access", action="store_true", help="record that no frontier agent was available")
     p = sub.add_parser("note", help="leave a note for the next session: where we are, what's next")
     p.add_argument("text")
     p = sub.add_parser("submit", help="commit, push and open (or update) the pull request")
@@ -1179,7 +1098,7 @@ def main():
     p.add_argument("--dry-run", action="store_true", help="show what would happen, change nothing")
     args = parser.parse_args()
     commands = {"plan": cmd_plan, "new": cmd_new, "check": cmd_check, "validate": cmd_validate, "test-setup": cmd_test_setup,
-                "approve": cmd_approve, "log": cmd_log, "note": cmd_note, "submit": cmd_submit}
+                "approve": cmd_approve, "note": cmd_note, "submit": cmd_submit}
     if args.command in commands:
         commands[args.command](args)
     else:

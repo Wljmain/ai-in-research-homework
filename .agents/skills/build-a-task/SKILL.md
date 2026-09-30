@@ -9,12 +9,12 @@ description: Guide a student in UCLA's "AI in Research" class (EPSS 254, Fall 20
 
 The person in front of you is in a UCLA graduate seminar on AI in research: a student, an auditing classmate or a professor, often a space physicist, planetary scientist, geophysicist or climate scientist. Some write code every day; some have never opened a terminal. No prior AI expertise is assumed.
 
-**The assignment** (full text in `week-1/README.md`): **think of the hardest task you can in your own field, and package it in Harbor format.** The goal is a task that a top expert in the field could do, and that today's best AI agents (including you) would fail. Along the way they learn how AI benchmarks work, and see first-hand where frontier agents succeed and where they break.
+**The assignment** (full text in `week-1/README.md`): **think of the hardest task you can in your own field, and package it in Harbor format.** The goal is a task that a top expert in the field could do, and that today's best AI agents (including you) would fail. Along the way they learn how AI benchmarks work. Week 1 ends when their task is submitted as a pull request; the instructor then runs frontier agents on every task. Don't run frontier agents on the task yourself, and don't suggest it.
 
 - **They are the scientist.** They choose the problem, supply or approve the data, and decide what counts as a correct answer. Never pick their research problem for them, never invent scientific facts, and never claim a result you did not run.
 - **You are the engineer and the guide.** Do the heavy lifting: Docker, tests, Harbor commands, git. Explain each step in one or two plain sentences: what you're doing and why. Define a term the first time you use it (see the glossary below). Keep explanations short; they learn most by watching it work.
 - **Stop at every CHECKPOINT** and wait for their agreement.
-- **Some commands need the student at the keyboard:** logins, installs that ask for their password, approvals, token setup, interactive shells, and the browser viewer. They are marked **(student runs this)** here, and `tools/hw` marks them **NEXT (the student …)**. Never run those yourself. They either wait for input forever, would put a secret into this conversation, or are the student's own decision. Give the student the exact command, ask them to run it in their own terminal window, and wait for them to say it's done.
+- **Some commands need the student at the keyboard:** logins, installs that ask for their password, approvals, interactive shells, and the browser viewer. They are marked **(student runs this)** here, and `tools/hw` marks them **NEXT (the student …)**. Never run those yourself. They either wait for input forever, would put a secret into this conversation, or are the student's own decision. Give the student the exact command, ask them to run it in their own terminal window, and wait for them to say it's done.
 - **Be honest about failures.** When a command fails, show the key line of the error, say what it means, and fix it.
 - **Pace.** Plan for a few sessions of 1–2 hours before the deadline. A hard task takes thought; the engineering around it is your job.
 
@@ -36,9 +36,8 @@ Do that one step, then run `tools/hw` again. Trust it over your memory of where 
 | `tools/hw check` | any time: the static checks CI runs, grouped by step |
 | `tools/hw validate` | the task is built (Step 4) |
 | `tools/hw approve instruction`, `… window`, `… publish` | **(student runs this)** at the three checkpoints |
-| `tools/hw log <job-folder> "<what happened>"` | after a frontier agent's attempt (Step 5) |
 | `tools/hw note "<where we are, what's next>"` | before ending any session |
-| `tools/hw submit --ai "<which AI helped, and how>"` | the student approved publishing (Step 6) |
+| `tools/hw submit --ai "<which AI helped, and how>"` | the student approved publishing (Step 5) |
 
 Only `tools/hw` writes the task's `authoring/progress.json`: never edit it. `tools/hw approve` refuses to run without a real terminal. That's on purpose, because approving is the student's decision; never work around it.
 
@@ -74,7 +73,7 @@ A task is **valid** when the oracle scores 1 and an agent that does nothing scor
 
 | Level | Name | Means | When |
 |---|---|---|---|
-| **1** | **Ambitious** | The hardest task you can think of in your field, in Harbor format. A top expert could do it, and you expect frontier agents to fail. The oracle scores 1, nop scores 0, CI passes. The acceptance window has an honest justification. A frontier agent tried it, if you have access to one. | **Week 1 homework, due before class on Wed Oct 7** |
+| **1** | **Ambitious** | The hardest task you can think of in your field, in Harbor format. A top expert could do it, and you expect frontier agents to fail. The oracle scores 1, nop scores 0, CI passes. The acceptance window has an honest justification. Submitted as a pull request. | **Week 1 homework, due before class on Wed Oct 7** |
 | 2 | Honest | You read agents' full trajectories and fixed everything they exposed: ambiguities, leaks, windows that reject good answers. Tolerances are calibrated with a script. | mid-quarter |
 | 3 | Proven hard | Frontier agents fail across several runs, and the trajectories show they fail on the science, not on a gap in your task. | late quarter |
 | 4 | Benchmark-ready | Meets the [Terminal-Bench-Science](https://github.com/harbor-framework/terminal-bench-science) bar and could be proposed there. | end of quarter |
@@ -184,32 +183,7 @@ Debugging:
 - A `RewardFileNotFoundError` with no verifier output usually means Docker can't see the folder. Move the repo under the home folder.
 - `bad interpreter` or `$'\r'` errors mean Windows line endings. The repo's `.gitattributes` prevents this; re-clone inside WSL.
 
-## Step 5: Watch a frontier agent try it (CHECKPOINT: uses their quota)
-
-Now let a real agent attempt the task on its own, in the sealed container. It uses the student's plan or credits, so ask first. Use whatever access they have. The vendor's CLI must be installed on their machine for the login step.
-
-| They have | Setup (student runs this, once) | Run (you run this) |
-|---|---|---|
-| ChatGPT, even free (Codex) | install the Codex CLI (`npm i -g @openai/codex` or `brew install codex`), then `codex login` | `uvx harbor@0.23.0 run -p <task> -a codex -m <model> -o jobs/runs --ae CODEX_AUTH_JSON_PATH=$HOME/.codex/auth.json` |
-| Claude Pro or Max | install Claude Code, run `claude setup-token`, and save the printed token in `~/.config/ai-in-research/claude-token` (`chmod 600` it) | `env -u ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN="$(cat ~/.config/ai-in-research/claude-token)" uvx harbor@0.23.0 run -p <task> -a claude-code -m <model> -o jobs/runs` |
-| GitHub Copilot (free for verified students) | create a fine-grained token with the "Copilot Requests" permission at github.com/settings/personal-access-tokens; save it to `~/.config/ai-in-research/copilot-token` (`chmod 600`) | `COPILOT_GITHUB_TOKEN="$(cat ~/.config/ai-in-research/copilot-token)" uvx harbor@0.23.0 run -p <task> -a copilot-cli -m <model> -o jobs/runs` |
-| An API key | they export it in the terminal you run in | `-a claude-code`, `-a codex` or `-a gemini-cli`, with `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `GEMINI_API_KEY` |
-
-- Model names change often. Check `uvx harbor@0.23.0 agent list` and the provider's current models, and use the strongest one the student can access.
-- Keep `-o jobs/runs` and don't pass `--job-name`. Harbor names each run by its start time, which gives every attempt a fresh folder. Reusing a job name silently shows an old result instead.
-- Never print, echo or commit a key or token. Read it from its file inside the command, as above, so it never appears in this conversation.
-- Subscription runs can stall on rate limits. If a trial ends strangely, look for a rate-limit message before blaming the task.
-- No access at all is fine: `tools/hw log --no-access`. The class will run every task against frontier agents together.
-
-**Then read the attempt together.** This is the most important learning moment of the week.
-- Read the trial folder under `jobs/runs/<run>/`. The agent's steps are in `agent/`, the verdict in `verifier/`.
-- Walk the student through what the agent did, in order. Or they can open **(student runs this)** `uvx harbor@0.23.0 view jobs/runs`.
-- Ask them: did it solve the task? The way an expert would? Did it take a shortcut you didn't anticipate? What surprised you?
-- Record it: `tools/hw log jobs/runs/<run-folder> "<what happened, and one honest sentence on what it says about the task>"`. It reads the date, agent, model and reward from the run itself, and adds a row to `authoring/attempts.md`.
-
-**Whatever happens is informative.** If the agent solves it, that's a real finding about how capable these agents are. Ask what made it easier than expected, and make the task harder where the difficulty was thin. If it fails, find *why* before celebrating. A failure means the task is hard only if the agent had everything it needed and went wrong on the science; ambiguity, missing information or a verifier too strict would mean the task is broken. Separating those two is the work of levels 2–3.
-
-## Step 6: Submit (CHECKPOINT: pushing is public)
+## Step 5: Submit (CHECKPOINT: pushing is public)
 
 1. **CHECKPOINT:** the student approves publishing: **(student runs this)** `tools/hw approve publish`. It lists every file that will become public, and asks them to confirm the data may be shared and to accept the MIT license.
 2. Ask the student which AI agent(s) helped build the task, and how, in a sentence or two. Then run `tools/hw submit --ai "<their answer>"`. It checks that the branch changes only their folder, commits, pushes to their fork, and opens the pull request with the class template filled in. `--dry-run` shows what it would do without doing it.
@@ -222,13 +196,13 @@ By submitting, the student licenses their task under the repository's MIT licens
 
 When the student comes back to improve their task, run `tools/hw`, then read `authoring/attempts.md` and the task's `class_level`.
 
-- **To reach level 2 (honest):** run a frontier agent and read its whole trajectory. Ask:
+- **To reach level 2 (honest):** read the whole trajectory of each frontier agent run on the task (the instructor runs them). Ask:
   - Did it fail only because the instruction was ambiguous?
   - Could it pass without doing the science: by guessing, writing a plausible default, reading something it shouldn't, or fetching this public repository, where `tests/` and the README reveal the answer?
   - Did the verifier reject an answer an expert would accept?
 
   Fix the task, not the agent. Write `authoring/evidence/calibrate.py` and keep the window honest with it.
-- **To reach level 3 (proven hard):** run several attempts, ideally more than one agent, and confirm the failures are on the science. If agents succeed, raise the difficulty where it's essential, never where it's arbitrary: deliver more, or withhold more (the frame from Step 1). Keep it verifiable and deterministic.
+- **To reach level 3 (proven hard):** confirm across several runs, ideally by more than one agent, that the failures are on the science. If agents succeed, raise the difficulty where it's essential, never where it's arbitrary: deliver more, or withhold more (the frame from Step 1). Keep it verifiable and deterministic.
 - **To reach level 4 (benchmark-ready):** read Terminal-Bench-Science's `CONTRIBUTING.md` and `rubrics/`. Run `uvx harbor@0.23.0 analyze -r <trial-analysis rubric> -m <strong model> <job folder>` on failed trials, to separate "hard" from "broken". Then consider proposing the task there. Accepted tasks earn co-authorship on their paper.
 
 ## Hard rules

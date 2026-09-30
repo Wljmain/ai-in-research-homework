@@ -7,16 +7,15 @@ Your AI agent runs these for you. Here they are if you'd rather work by hand. Ru
 | Command | What it does |
 |---|---|
 | `tools/hw` | The checklist and the next step |
+| `tools/hw plan` | What happens, start to finish |
 | `tools/hw new <task-name>` | Creates `week-1/submissions/<github-username>/<task-name>/` on its own branch, `week1-<task-name>` |
 | `tools/hw check [task-folder]` | The static checks CI runs, grouped by step: fast, no Docker |
 | `tools/hw validate` | The reference solution must score 1 and a do-nothing agent 0. Records the result |
 | `tools/hw test-setup` | Runs the class example once, to prove Docker and Harbor work on your computer |
 | `tools/hw approve instruction`, `window`, `publish` | You sign off at the three checkpoints. Only works in your own terminal |
-| `tools/hw log <job-folder> "<what happened>"` | Records a frontier agent's attempt in `authoring/attempts.md` (`--no-access` if you had none) |
 | `tools/hw note "<where we are, what's next>"` | Leaves a note for your next session |
 | `tools/hw submit --ai "<which AI helped, and how>"` | Commits, pushes and opens your pull request, or updates it |
-| `uvx harbor@0.23.0 run -p <task-folder> -a <agent> -m <model> -o jobs/runs` | Lets a real agent attempt the task |
-| `uvx harbor@0.23.0 view jobs/runs` | Browses runs and agent trajectories in a web page |
+| `uvx harbor@0.23.0 view jobs/validate` | Browses your validation runs in a web page |
 
 `tools/hw` keeps a task's approvals and validation in its `authoring/progress.json`, each with a fingerprint of the files it covered, so a later change shows up. What it knows about your computer (the GitHub login it saw, the setup test) stays in `.git/hw.json` and never leaves your computer.
 

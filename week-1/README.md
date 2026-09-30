@@ -2,7 +2,7 @@
 
 **Due before class on Wednesday, October 7, 2026.**
 
-What is the hardest thing in your field that a top expert can do on a computer, with an answer that can be checked, and that today's best AI agents can't? Design that task, and package it as a benchmark task: a problem an AI agent attempts on its own, in a sealed container, graded automatically. Then watch a frontier agent try.
+What is the hardest thing in your field that a top expert can do on a computer, with an answer that can be checked, and that today's best AI agents can't? Design that task, and package it as a benchmark task: a problem an AI agent attempts on its own, in a sealed container, graded automatically. After you submit, we run frontier AI agents on every task.
 
 Aim high. An AI coding agent does the engineering with you; you bring the science.
 
@@ -13,7 +13,7 @@ Aim high. An AI coding agent does the engineering with you; you bring the scienc
 
    > Read https://class.xhelio.ai/week-1/homework.md and help me with my homework.
 
-It walks you through setup, finding the hardest problem you can still verify, building and testing the task, letting a frontier agent attempt it, and opening your pull request.
+It walks you through setup, finding the hardest problem you can still verify, building and testing the task, and opening your pull request.
 
 Coming back later? Open your agent in your clone of this repository and give it the same line. It picks up where you left off.
 
@@ -30,7 +30,7 @@ environment/          the agent's container: Dockerfile + data
 solution/             your reference solution; may ship precomputed results
 tests/                the verifier: its own container, no network, reward 1 or 0
 README.md             difficulty, reference solution, verification
-authoring/            how the data and reference were made, every agent attempt
+authoring/            how the data and reference were made, a log of runs
 ```
 
 It counts when your reference solution scores 1, an agent that does nothing scores 0, and the automatic checks pass. The [format example](example/solar-wind-spectral-index/) shows every file. It is deliberately easy; its README ends with how that same problem would become hard.
