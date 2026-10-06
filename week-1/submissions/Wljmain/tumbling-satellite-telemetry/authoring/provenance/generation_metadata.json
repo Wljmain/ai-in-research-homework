@@ -1,0 +1,69 @@
+{
+  "seed": 1131750400,
+  "sample_rate_hz": 125000.0,
+  "duration_s": 10.0,
+  "num_samples": 1250000,
+  "dtype": "complex64",
+  "carrier_hz": 437500000.0,
+  "target": {
+    "modulation": "BPSK",
+    "symbol_rate_baud": 2400.0,
+    "rrc_rolloff": 0.35,
+    "snr_db": 5.0,
+    "preamble_bits": 64,
+    "sync_word": "DDAA",
+    "sync_bits": 16,
+    "fec": {
+      "type": "convolutional",
+      "constraint_length": 7,
+      "rate": "1/2",
+      "g0_octal": "171",
+      "g1_octal": "133"
+    },
+    "scrambler": {
+      "polynomial": "x^7 + x^4 + 1",
+      "seed": "0x5D"
+    },
+    "crc": "9191",
+    "doppler": {
+      "relative_velocity_mps": 7500.0,
+      "closest_approach_m": 150000.0,
+      "formula": "-fc/c * v^2*t / sqrt(h^2+(v*t)^2)"
+    },
+    "oscillator": {
+      "offset_hz": 1300.0,
+      "drift_hz_per_s": 4.0,
+      "modulation_hz": 0.35,
+      "modulation_depth_hz": 18.0
+    },
+    "tumbling": {
+      "frequency_hz": 0.2,
+      "phase_rad": 1.17
+    },
+    "frame_number": 187,
+    "payload": "SAT=042\nFRAME=0187\nTIME=2026-09-14T03:17:49Z\nLAT=+034.214\nLON=-0118.421\nALT=0614.1\nTEMP=273.25\nPRESS=0979.7\nSOLAR=0758.0\nBATT=07.76\nCURRENT=0.393",
+    "payload_length": 145,
+    "raw_bits": 1192,
+    "coded_bits": 2384,
+    "frame_bits": 2464,
+    "doppler_start_hz": 1938.9522992001478,
+    "doppler_end_hz": 1396.753107816649
+  },
+  "interferers": {
+    "cw": {
+      "offset_hz": -17500.0
+    },
+    "afsk": {
+      "offset_hz": 11500.0,
+      "baud": 1200,
+      "mark_hz": 1200,
+      "space_hz": 2200
+    },
+    "digital": {
+      "offset_hz": 29000.0,
+      "baud": 4800,
+      "type": "QPSK-like"
+    }
+  },
+  "output": "C:\\Users\\wljma\\ai-in-research-homework\\week-1\\submissions\\Wljmain\\tumbling-satellite-telemetry\\environment\\data\\recording.npy"
+}
