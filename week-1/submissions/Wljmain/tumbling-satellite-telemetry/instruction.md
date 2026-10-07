@@ -7,10 +7,6 @@ The recording is located at:
 
 The file is a NumPy `.npy` array containing `complex64` IQ samples. The sample rate is 125000 samples/s and the recording duration is 10 seconds.
 
-For your convenience, it has also been proviced in `.wav` format at: 
-
-`/root/data/recording_iq`
-
 Your task is to identify and decode the spacecraft telemetry signal contained in the recording.
 
 The recording contains multiple signals and interference sources. Do not assume that the strongest signal is the spacecraft transmission. Determine which signal corresponds to the telemetry transmission and recover at least one complete telemetry frame.

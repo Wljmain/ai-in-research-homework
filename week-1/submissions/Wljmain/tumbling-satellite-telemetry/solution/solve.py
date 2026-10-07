@@ -50,46 +50,56 @@ def bits_to_bytes(bits):
     return np.packbits(bits).tobytes()
 
 
-def rrc_impulse_response(sample_rate, symbol_rate, alpha,
-                         span_symbols=10):
+def rrc_impulse_response(
+    sample_rate,
+    symbol_rate,
+    alpha,
+    span_symbols=10,
+):
+    """
+    Generate a root-raised-cosine impulse response.
+
+    The response is normalized to unit energy.
+    """
 
     sps = sample_rate / symbol_rate
     half_span = span_symbols / 2
     n = int(np.ceil(half_span * sps))
 
-    t = np.arange(-n, n + 1) / sample_rate
+    t = np.arange(-n, n + 1, dtype=float) / sample_rate
     T = 1.0 / symbol_rate
 
     h = np.zeros_like(t)
 
     for i, ti in enumerate(t):
+        x = ti / T
 
         if abs(ti) < 1e-12:
-            h[i] = 1 + alpha * (4 / np.pi - 1)
+            h[i] = 1.0 + alpha * (4.0 / np.pi - 1.0)
 
-        elif abs(abs(4 * alpha * ti / T) - 1.0) < 1e-10:
+        elif abs(abs(4.0 * alpha * x) - 1.0) < 1e-10:
             h[i] = (
-                alpha / np.sqrt(2)
+                alpha / np.sqrt(2.0)
                 * (
-                    (1 + 2 / np.pi)
-                    * np.sin(np.pi / (4 * alpha))
+                    (1.0 + 2.0 / np.pi)
+                    * np.sin(np.pi / (4.0 * alpha))
                     +
-                    (1 - 2 / np.pi)
-                    * np.cos(np.pi / (4 * alpha))
+                    (1.0 - 2.0 / np.pi)
+                    * np.cos(np.pi / (4.0 * alpha))
                 )
             )
 
         else:
             numerator = (
-                np.sin(np.pi * ti / T * (1 - alpha))
+                np.sin(np.pi * x * (1.0 - alpha))
                 +
-                4 * alpha * ti / T
-                * np.cos(np.pi * ti / T * (1 + alpha))
+                4.0 * alpha * x
+                * np.cos(np.pi * x * (1.0 + alpha))
             )
 
             denominator = (
-                np.pi * ti / T
-                * (1 - (4 * alpha * ti / T) ** 2)
+                np.pi * x
+                * (1.0 - (4.0 * alpha * x) ** 2)
             )
 
             h[i] = numerator / denominator
@@ -100,6 +110,12 @@ def rrc_impulse_response(sample_rate, symbol_rate, alpha,
 
 
 def doppler_frequency(t):
+    """
+    Doppler trajectory used by the waveform generator.
+
+    t is measured relative to closest approach.
+    """
+
     vr = (
         V_REL ** 2 * t
         / np.sqrt(H_CLOSE ** 2 + (V_REL * t) ** 2)
@@ -109,49 +125,61 @@ def doppler_frequency(t):
 
 
 def oscillator_frequency(t):
+    """
+    Oscillator frequency error used by the generator.
+    """
+
     return (
         F_OSC0
         + F_OSC_DRIFT * t
         + F_OSC_MOD_DEPTH
-        * np.sin(2 * np.pi * F_OSC_MOD * t)
+        * np.sin(2.0 * np.pi * F_OSC_MOD * t)
     )
 
 
 def remove_frequency_error(iq):
     """
-    Remove the exact frequency trajectory used by the generator.
+    Remove the known Doppler + oscillator frequency trajectory.
     """
 
     n = len(iq)
-    t = np.arange(n) / FS
+    t = np.arange(n, dtype=float) / FS
 
-    t_rel = t - TARGET_START - TARGET_DURATION / 2
+    t_rel = (
+        t
+        - TARGET_START
+        - TARGET_DURATION / 2.0
+    )
 
     frequency = (
         doppler_frequency(t_rel)
         + oscillator_frequency(t_rel)
     )
 
-    phase = np.zeros(n)
+    # Integrate instantaneous frequency to obtain phase.
+    phase = np.zeros(n, dtype=float)
 
-    phase[1:] = (
-        2 * np.pi
-        * np.cumsum(frequency[:-1])
-        / FS
-    )
+    if n > 1:
+        phase[1:] = (
+            2.0
+            * np.pi
+            * np.cumsum(frequency[:-1])
+            / FS
+        )
 
     return iq * np.exp(-1j * phase)
 
 
 def viterbi_decode(received):
     """
-    Hard-decision Viterbi decoder for the exact encoder:
+    Hard-decision Viterbi decoder for:
 
         K = 7
         G0 = 171 octal
         G1 = 133 octal
 
-    The encoder is nonterminated.
+    The encoder is nonterminated, so the minimum-metric
+    final state is selected.
     """
 
     g0 = 0o171
@@ -166,38 +194,47 @@ def viterbi_decode(received):
 
     INF = 10**12
 
-    # Encoder state is the previous six input bits.
     metrics = np.full(64, INF, dtype=np.int64)
     metrics[0] = 0
 
-    prev_state = np.zeros((n, 64), dtype=np.uint8)
-    prev_bit = np.zeros((n, 64), dtype=np.uint8)
+    prev_state = np.zeros(
+        (n, 64),
+        dtype=np.uint8,
+    )
+
+    prev_bit = np.zeros(
+        (n, 64),
+        dtype=np.uint8,
+    )
 
     for k in range(n):
-
         r0 = int(received[2 * k])
         r1 = int(received[2 * k + 1])
 
-        new_metrics = np.full(64, INF, dtype=np.int64)
+        new_metrics = np.full(
+            64,
+            INF,
+            dtype=np.int64,
+        )
 
         for state in range(64):
-
             metric = metrics[state]
 
             if metric >= INF:
                 continue
 
             for bit in (0, 1):
-
                 reg = (state << 1) | bit
 
                 out0 = (reg & g0).bit_count() & 1
                 out1 = (reg & g1).bit_count() & 1
 
-                branch = (out0 != r0) + (out1 != r1)
+                branch = (
+                    int(out0 != r0)
+                    + int(out1 != r1)
+                )
 
                 next_state = reg & 0x3F
-
                 candidate = metric + branch
 
                 if candidate < new_metrics[next_state]:
@@ -207,10 +244,12 @@ def viterbi_decode(received):
 
         metrics = new_metrics
 
-    # Nonterminated encoder: select best final state.
     state = int(np.argmin(metrics))
 
-    decoded = np.empty(n, dtype=np.uint8)
+    decoded = np.empty(
+        n,
+        dtype=np.uint8,
+    )
 
     for k in range(n - 1, -1, -1):
         decoded[k] = prev_bit[k, state]
@@ -220,48 +259,95 @@ def viterbi_decode(received):
 
 
 def descramble(bits, seed=0x5D):
+    """
+    Undo the x^7 + x^4 + 1 scrambler.
+    """
+
     state = seed & 0x7F
 
+    bits = np.asarray(bits, dtype=np.uint8)
     out = np.empty_like(bits)
 
     for i, bit in enumerate(bits):
-
-        feedback = ((state >> 6) ^ (state >> 3)) & 1
+        feedback = (
+            (state >> 6)
+            ^ (state >> 3)
+        ) & 1
 
         out[i] = bit ^ feedback
 
-        state = ((state << 1) | feedback) & 0x7F
+        state = (
+            (state << 1)
+            | feedback
+        ) & 0x7F
 
     return out
 
 
-def score_preamble(bits):
-    """
-    Score a candidate bitstream against the known 64-bit
-    alternating preamble.
-    """
-
-    preamble = np.tile(
+def preamble_bits():
+    return np.tile(
         np.array([1, 0], dtype=np.uint8),
         32,
     )
 
-    if len(bits) < len(preamble):
-        return -1
 
-    a = np.sum(bits[:64] == preamble)
-    b = np.sum(bits[:64] == (1 - preamble))
+def find_preamble(bits):
+    """
+    Find the 64-bit alternating preamble.
 
-    return max(a, b)
+    Returns (offset, polarity), where polarity is the
+    multiplier that should be applied to the BPSK samples.
+    """
+
+    preamble = preamble_bits()
+
+    max_offset = len(bits) - len(preamble)
+
+    if max_offset < 0:
+        return None
+
+    # Exact search first.
+    for offset in range(max_offset + 1):
+        candidate = bits[
+            offset:offset + 64
+        ]
+
+        if np.array_equal(candidate, preamble):
+            return offset, 1
+
+        if np.array_equal(
+            candidate,
+            1 - preamble,
+        ):
+            return offset, -1
+
+    # Correlation fallback.
+    x = 1.0 - 2.0 * bits.astype(float)
+    p = 1.0 - 2.0 * preamble.astype(float)
+
+    corr = np.correlate(
+        x,
+        p,
+        mode="valid",
+    )
+
+    offset = int(np.argmax(np.abs(corr)))
+
+    polarity = (
+        1 if corr[offset] >= 0 else -1
+    )
+
+    return offset, polarity
 
 
 def recover_symbols(iq):
     """
-    Matched filter and search fractional symbol timing.
+    Matched-filter the BPSK waveform and search fractional
+    symbol timing around the known target start.
 
-    The generator creates the waveform using a 100x intermediate
-    grid and interpolates it to 125 kS/s, so blindly assuming
-    an integer 52-sample symbol period is undesirable.
+    The waveform has 2400 baud at 125 kS/s, so the symbol
+    spacing is 52.083333... samples. Fractional timing is
+    therefore important.
     """
 
     h = rrc_impulse_response(
@@ -279,124 +365,130 @@ def recover_symbols(iq):
 
     sps = FS / SYMBOL_RATE
 
-    # Search a set of timing offsets.
+    # target_start is an absolute sample index because main()
+    # restores the original timeline by padding the trimmed data.
+    target_start = int(
+        TARGET_START * FS
+    )
+
+    # Search 128 fractional timing phases over one symbol.
     best = None
 
-    # The target contains 64 preamble bits followed by
-    # 16 sync bits and 8*(2 + payload + 2)*2 coded bits.
-    # We search around the target start and allow several
-    # samples of timing uncertainty.
-    target_start = int(TARGET_START * FS)
+    # Enough symbols to contain the frame, plus margin.
+    count = int(
+        (TARGET_DURATION - 0.2)
+        * SYMBOL_RATE
+    )
 
-    for timing in np.linspace(0, sps, 128, endpoint=False):
+    sample_indices = np.arange(
+        len(filtered),
+        dtype=float,
+    )
 
-        first = target_start + int(5 * sps + timing)
-
-        count = int(
-            (TARGET_DURATION - 0.2) * SYMBOL_RATE
+    for timing in np.linspace(
+        0.0,
+        sps,
+        128,
+        endpoint=False,
+    ):
+        first = (
+            target_start
+            + timing
         )
 
-        positions = first + np.arange(count) * sps
+        positions = (
+            first
+            + np.arange(count, dtype=float) * sps
+        )
 
         valid = (
             (positions >= 0)
             & (positions < len(filtered))
         )
 
-        if np.sum(valid) < 500:
+        if np.count_nonzero(valid) < 500:
             continue
 
         positions = positions[valid]
 
         samples = np.interp(
             positions,
-            np.arange(len(filtered)),
+            sample_indices,
             filtered.real,
         )
 
-        bits = (samples < 0).astype(np.uint8)
+        bits = (
+            samples < 0
+        ).astype(np.uint8)
 
-        score = score_preamble(bits)
+        # The preamble is at the target start. Do not skip
+        # arbitrary symbols before testing it.
+        preamble = preamble_bits()
 
-        if best is None or score > best[0]:
-            best = (score, timing, positions, samples)
+        if len(bits) >= 64:
+            direct = np.sum(
+                bits[:64] == preamble
+            )
+
+            inverted = np.sum(
+                bits[:64] == (1 - preamble)
+            )
+
+            score = max(
+                direct,
+                inverted,
+            )
+        else:
+            score = -1
+
+        if (
+            best is None
+            or score > best["score"]
+        ):
+            best = {
+                "score": score,
+                "timing": timing,
+                "positions": positions,
+                "samples": samples,
+            }
 
     if best is None:
-        raise RuntimeError("could not recover symbol timing")
+        raise RuntimeError(
+            "could not recover symbol timing"
+        )
 
     return best
 
 
 def find_frame(symbol_samples):
     """
-    Search around the beginning of the target for the frame.
-
-    Because the exact target start is known to the reference
-    solution, this is deliberately much less exploratory than
-    the student's blind task.
+    Locate the preamble and determine BPSK polarity.
     """
 
-    samples = symbol_samples
+    samples = np.asarray(
+        symbol_samples,
+        dtype=float,
+    )
 
-    # Try both BPSK polarities.
-    candidates = []
+    # Convert negative-valued symbols to bit 1.
+    raw_bits = (
+        samples < 0
+    ).astype(np.uint8)
 
-    for polarity in (1, -1):
+    result = find_preamble(raw_bits)
 
-        vals = samples * polarity
-        bits = (vals < 0).astype(np.uint8)
-
-        # Search for the 64-bit alternating preamble.
-        preamble = np.tile(
-            np.array([1, 0], dtype=np.uint8),
-            32,
+    if result is None:
+        raise RuntimeError(
+            "could not find frame preamble"
         )
 
-        for offset in range(0, min(100, len(bits) - 80)):
+    offset, polarity = result
 
-            a = bits[offset:offset + 64]
+    bits = (
+        (samples * polarity) < 0
+    ).astype(np.uint8)
 
-            if np.array_equal(a, preamble):
-                candidates.append(
-                    (offset, polarity, bits)
-                )
-
-            elif np.array_equal(a, 1 - preamble):
-                candidates.append(
-                    (offset, -polarity, bits)
-                )
-
-    if not candidates:
-        # Fall back to maximum correlation.
-        preamble_pm = np.tile(
-            np.array([1, -1]),
-            32,
-        )
-
-        x = 1 - 2 * (samples < 0).astype(np.int8)
-
-        corr = np.correlate(
-            x.astype(float),
-            preamble_pm.astype(float),
-            mode="valid",
-        )
-
-        offset = int(np.argmax(np.abs(corr)))
-
-        polarity = (
-            1 if corr[offset] > 0 else -1
-        )
-
-        bits = (
-            ((samples * polarity) < 0)
-            .astype(np.uint8)
-        )
-
-        candidates.append(
-            (offset, polarity, bits)
-        )
-
-    return candidates[0]
+    return offset, polarity, bits
 
 
 def decode_frame(bits, offset):
@@ -405,61 +497,112 @@ def decode_frame(bits, offset):
 
         64-bit preamble
         16-bit DDAA sync
-        convolutionally coded LENGTH + PAYLOAD + CRC
+        convolutionally coded:
+            LENGTH | PAYLOAD | CRC
+
+    The coded section is rate 1/2.
     """
 
     sync = np.unpackbits(
-        np.frombuffer(bytes.fromhex("DDAA"), dtype=np.uint8)
+        np.frombuffer(
+            bytes.fromhex("DDAA"),
+            dtype=np.uint8,
+        )
     )
 
     pos = offset + 64
 
-    if not np.array_equal(
-        bits[pos:pos + 16],
-        sync,
+    if (
+        pos + 16 > len(bits)
+        or not np.array_equal(
+            bits[pos:pos + 16],
+            sync,
+        )
     ):
-        raise RuntimeError("sync word not found")
+        raise RuntimeError(
+            "sync word not found"
+        )
 
     pos += 16
 
-    # The remainder is coded at rate 1/2.
     coded = bits[pos:]
 
-    # The frame should contain at least length + CRC.
-    if len(coded) < 64:
-        raise RuntimeError("insufficient coded data")
+    # We need enough coded bits to recover the
+    # 16-bit length field.
+    if len(coded) < 32:
+        raise RuntimeError(
+            "insufficient coded data for length"
+        )
 
-    # Decode a range of possible coded lengths.
-    decoded = viterbi_decode(coded)
+    # Decode only the first 16 information bits first.
+    #
+    # This prevents samples after the actual frame from
+    # influencing the length-field traceback.
+    decoded_header = viterbi_decode(
+        coded[:32]
+    )
 
-    # Descramble the information bits.
-    info = descramble(decoded)
+    info_header = descramble(
+        decoded_header
+    )
 
-    # First two bytes are the payload length.
-    if len(info) < 32:
-        raise RuntimeError("insufficient decoded information")
+    if len(info_header) < 16:
+        raise RuntimeError(
+            "could not recover length field"
+        )
 
     length = int.from_bytes(
-        bits_to_bytes(info[:16]),
+        bits_to_bytes(
+            info_header[:16]
+        ),
         "big",
     )
 
-    total_bytes = 2 + length + 2
-    total_bits = total_bytes * 8
+    total_bytes = (
+        2
+        + length
+        + 2
+    )
 
-    if total_bits > len(info):
+    total_info_bits = (
+        total_bytes * 8
+    )
+
+    total_coded_bits = (
+        total_info_bits * 2
+    )
+
+    if total_coded_bits > len(coded):
         raise RuntimeError(
-            f"decoded length {length} exceeds available data"
+            f"decoded length {length} exceeds "
+            "available coded data"
+        )
+
+    # Decode exactly the frame and nothing after it.
+    decoded = viterbi_decode(
+        coded[:total_coded_bits]
+    )
+
+    info = descramble(decoded)
+
+    if len(info) < total_info_bits:
+        raise RuntimeError(
+            "insufficient decoded information"
         )
 
     frame = bits_to_bytes(
-        info[:total_bits]
+        info[:total_info_bits]
     )
 
-    payload = frame[2:2 + length]
+    payload = frame[
+        2:2 + length
+    ]
 
     received_crc = int.from_bytes(
-        frame[2 + length:2 + length + 2],
+        frame[
+            2 + length:
+            2 + length + 2
+        ],
         "big",
     )
 
@@ -469,67 +612,111 @@ def decode_frame(bits, offset):
 
     if received_crc != calculated_crc:
         raise RuntimeError(
-            f"CRC mismatch: received "
-            f"{received_crc:04X}, calculated "
-            f"{calculated_crc:04X}"
+            "CRC mismatch: "
+            f"received {received_crc:04X}, "
+            f"calculated {calculated_crc:04X}"
         )
+
+    try:
+        payload_text = payload.decode(
+            "ascii"
+        )
+    except UnicodeDecodeError as exc:
+        raise RuntimeError(
+            "payload is not valid ASCII"
+        ) from exc
 
     return {
         "length": length,
-        "payload": payload.decode("ascii"),
+        "payload": payload_text,
         "crc_valid": True,
     }
 
 
 def main():
-
     iq = np.load(INPUT)
 
-    if iq.dtype != np.complex64:
-        iq = iq.astype(np.complex64)
+    if not np.iscomplexobj(iq):
+        raise RuntimeError(
+            f"recording is not complex IQ: {iq.dtype}"
+        )
 
+    if iq.dtype != np.complex64:
+        iq = iq.astype(
+            np.complex64,
+            copy=False,
+        )
+
+    # Remove the known carrier trajectory while retaining
+    # the original absolute sample timeline.
     corrected = remove_frequency_error(iq)
 
-    # Work only on the target region.
-    start = int((TARGET_START - 0.05) * FS)
+    # Work on a small region around the target.
+    #
+    # Keep enough margin for the RRC filter and timing search.
+    start = int(
+        (TARGET_START - 0.05) * FS
+    )
+
     end = int(
         (TARGET_START + TARGET_DURATION + 0.05)
         * FS
     )
 
-    corrected = corrected[start:end]
+    start = max(
+        0,
+        start,
+    )
 
-    # Use the known target start after trimming.
-    best = recover_symbols(
-        np.pad(
-            corrected,
-            (int(TARGET_START * FS), 0),
+    end = min(
+        len(corrected),
+        end,
+    )
+
+    trimmed = corrected[start:end]
+
+    if len(trimmed) < 1000:
+        raise RuntimeError(
+            "recording is too short"
         )
+
+    # Restore the original absolute sample coordinates.
+    #
+    # The target is at TARGET_START in the original recording,
+    # while trimmed begins at `start`.
+    restored = np.pad(
+        trimmed,
+        (start, 0),
     )
 
-    _, timing, positions, samples = best
-
-    offset, polarity, bits = find_frame(samples)
-
-    frame = decode_frame(bits, offset)
-
-    # Estimate carrier offset at beginning of recovered frame.
-    #
-    # The frequency correction model is known, so evaluate the
-    # generated instantaneous frequency at the recovered frame.
-    #
-    # `offset` is relative to the sampled target waveform.
-    sample_index = int(
-        TARGET_START * FS
-        + offset * FS / SYMBOL_RATE
+    best = recover_symbols(
+        restored
     )
 
-    t = sample_index / FS
+    positions = best["positions"]
+    samples = best["samples"]
+
+    offset, polarity, bits = find_frame(
+        samples
+    )
+
+    frame = decode_frame(
+        bits,
+        offset,
+    )
+
+    # Position of the first symbol of the recovered frame
+    # on the original recording timeline.
+    frame_sample = positions[offset]
+
+    frame_time = (
+        frame_sample / FS
+    )
 
     t_rel = (
-        t
+        frame_time
         - TARGET_START
-        - TARGET_DURATION / 2
+        - TARGET_DURATION / 2.0
     )
 
     carrier_offset = (
@@ -538,10 +725,16 @@ def main():
     )
 
     result = {
-        "carrier_offset_hz": float(carrier_offset),
-        "symbol_rate_baud": float(SYMBOL_RATE),
+        "carrier_offset_hz": float(
+            carrier_offset
+        ),
+        "symbol_rate_baud": float(
+            SYMBOL_RATE
+        ),
         "payload": frame["payload"],
-        "crc_valid": bool(frame["crc_valid"]),
+        "crc_valid": bool(
+            frame["crc_valid"]
+        ),
     }
 
     RESULT.parent.mkdir(
@@ -549,10 +742,22 @@ def main():
         exist_ok=True,
     )
 
-    with open(RESULT, "w") as f:
-        json.dump(result, f, indent=2)
+    with open(
+        RESULT,
+        "w",
+    ) as f:
+        json.dump(
+            result,
+            f,
+            indent=2,
+        )
 
-    print(json.dumps(result, indent=2))
+    print(
+        json.dumps(
+            result,
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":

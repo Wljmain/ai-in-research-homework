@@ -643,7 +643,13 @@ def generate_digital(rng):
     i = signal.sosfilt(sos, waveform.real)
     q = signal.sosfilt(sos, waveform.imag)
 
-    return 1.5 * (i + 1j * q)
+    t = np.arange(N) / FS
+
+    return (
+        1.5
+        * (i + 1j * q)
+        * np.exp(1j * 2 * np.pi * DIGITAL_FREQ * t)
+    )
 
 
 # ============================================================
@@ -741,18 +747,25 @@ def main():
     digital *= 2.0
 
     combined_clean = (
-        target
-        + cw
-        + afsk
-        + digital
-        + impulsive
+    target
+    + cw
+    + afsk
+    + digital
+    + impulsive
     )
 
-    recording = add_awgn(
-        combined_clean,
-        TARGET_SNR_DB,
-        rng,
+    target_power = np.mean(np.abs(target) ** 2)
+
+    noise_power = target_power / 10 ** (TARGET_SNR_DB / 10)
+
+    sigma = np.sqrt(noise_power / 2)
+
+    noise = sigma * (
+        rng.normal(size=N)
+        + 1j * rng.normal(size=N)
     )
+
+    recording = combined_clean + noise
 
     recording = recording.astype(
         np.complex64
